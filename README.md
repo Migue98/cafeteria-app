@@ -25,7 +25,7 @@ estado deseado al clúster.
 |---|---|
 | Miguel Alberto Bazán Silva | [`@Migue98`](https://github.com/Migue98) |
 | González Nava Alicia Aislinn | [`@aliceaislinn`](https://github.com/aliceaislinn) |
-| Quintero Rubio Martín | Pendiente de confirmar |
+| Quintero Rubio Martín | [`@mquinteror1000`](https://github.com/mquinteror1000) |
 
 Las responsabilidades concretas se asignarán mediante Issues y Pull Requests;
 la tabla no implica propiedad exclusiva sobre componentes.
