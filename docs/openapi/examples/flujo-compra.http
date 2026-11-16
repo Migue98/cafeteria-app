@@ -1,0 +1,43 @@
+@menu = http://localhost:8001
+@pedidos = http://localhost:8002
+@lealtad = http://localhost:8003
+@customer_id = 11111111-1111-4111-8111-111111111111
+
+### Salud de los servicios
+GET {{menu}}/health
+
+###
+GET {{pedidos}}/health
+
+###
+GET {{lealtad}}/health
+
+### Consultar el menú disponible
+GET {{menu}}/api/v1/products?available=true&limit=20&offset=0
+X-Request-ID: 22222222-2222-4222-8222-222222222222
+
+### Consultar un producto
+GET {{menu}}/api/v1/products/1
+
+### Crear pedido; conservar la clave para probar el replay idempotente
+POST {{pedidos}}/api/v1/orders
+Content-Type: application/json
+Idempotency-Key: demo-order-001
+X-Request-ID: 33333333-3333-4333-8333-333333333333
+
+{
+  "customer_id": "{{customer_id}}",
+  "items": [
+    {"product_id": 1, "quantity": 2},
+    {"product_id": 5, "quantity": 1}
+  ]
+}
+
+### Consultar pedidos del cliente
+GET {{pedidos}}/api/v1/orders?customer_id={{customer_id}}&limit=20&offset=0
+
+### Consultar saldo de puntos
+GET {{lealtad}}/api/v1/customers/{{customer_id}}/points
+
+### Métricas
+GET {{pedidos}}/metrics

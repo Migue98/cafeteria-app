@@ -1,0 +1,219 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cafetería - Servicio de lealtad",
+    "version": "0.1.0",
+    "description": "Contrato para acreditar puntos de forma idempotente y consultar el saldo de un cliente."
+  },
+  "servers": [
+    {"url": "http://localhost:8003", "description": "Desarrollo local"},
+    {"url": "http://svc-lealtad:8003", "description": "DNS interno de Kubernetes"}
+  ],
+  "tags": [
+    {"name": "operación"},
+    {"name": "lealtad"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "loyaltyHealth",
+        "summary": "Comprueba el servicio y PostgreSQL",
+        "responses": {
+          "200": {
+            "description": "Servicio disponible",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "loyaltyMetrics",
+        "summary": "Expone métricas para Prometheus",
+        "responses": {
+          "200": {
+            "description": "Métricas en formato Prometheus",
+            "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/points/earn": {
+      "post": {
+        "tags": ["lealtad"],
+        "operationId": "earnPoints",
+        "summary": "Acredita los puntos de un pedido",
+        "description": "Otorga un punto por cada 1000 centavos ($10 MXN) completos. order_id e Idempotency-Key evitan una acreditación duplicada.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EarnPointsRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "Puntos acreditados por primera vez",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointAward"}}}
+          },
+          "200": {
+            "description": "Replay idempotente; devuelve la acreditación original con replayed=true",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointAward"}}}
+          },
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/customers/{customer_id}/points": {
+      "get": {
+        "tags": ["lealtad"],
+        "operationId": "getPointsBalance",
+        "summary": "Consulta el saldo de puntos",
+        "description": "Un cliente sin movimientos obtiene saldo cero; no se considera error 404.",
+        "parameters": [
+          {"$ref": "#/components/parameters/CustomerId"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Saldo actual",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointsBalance"}}}
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "CustomerId": {
+        "name": "customer_id",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Clave estable para reintentar la misma operación sin duplicarla.",
+        "schema": {"type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$"}
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Identificador de correlación recibido o generado por el servicio.",
+        "schema": {"type": "string", "format": "uuid"}
+      }
+    },
+    "responses": {
+      "Conflict": {
+        "description": "La clave fue reutilizada con otro cuerpo o el pedido ya se asoció a datos distintos",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ValidationError": {
+        "description": "Solicitud inválida",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ServiceUnavailable": {
+        "description": "PostgreSQL no está disponible",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      }
+    },
+    "schemas": {
+      "EarnPointsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["order_id", "customer_id", "amount_cents", "currency"],
+        "properties": {
+          "order_id": {"type": "string", "format": "uuid"},
+          "customer_id": {"type": "string", "format": "uuid"},
+          "amount_cents": {"type": "integer", "minimum": 1, "examples": [11000]},
+          "currency": {"type": "string", "const": "MXN"},
+          "occurred_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "PointAward": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["movement_id", "order_id", "customer_id", "points_earned", "balance", "rule", "replayed", "awarded_at"],
+        "properties": {
+          "movement_id": {"type": "string", "format": "uuid"},
+          "order_id": {"type": "string", "format": "uuid"},
+          "customer_id": {"type": "string", "format": "uuid"},
+          "points_earned": {"type": "integer", "minimum": 0, "examples": [11]},
+          "balance": {"type": "integer", "minimum": 0, "examples": [31]},
+          "rule": {"type": "string", "const": "1-point-per-10-mxn-v1"},
+          "replayed": {"type": "boolean"},
+          "awarded_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "PointsBalance": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["customer_id", "balance", "updated_at"],
+        "properties": {
+          "customer_id": {"type": "string", "format": "uuid"},
+          "balance": {"type": "integer", "minimum": 0},
+          "updated_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "DependencyHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {"type": "string", "enum": ["up", "down"]},
+          "latency_ms": {"type": ["number", "null"], "minimum": 0}
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service", "status", "version", "dependencies"],
+        "properties": {
+          "service": {"type": "string", "const": "svc-lealtad"},
+          "status": {"type": "string", "enum": ["healthy", "degraded"]},
+          "version": {"type": "string", "examples": ["git-a1b2c3d"]},
+          "dependencies": {
+            "type": "object",
+            "required": ["postgres"],
+            "properties": {"postgres": {"$ref": "#/components/schemas/DependencyHealth"}}
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type", "title", "status", "detail", "code", "trace_id", "instance"],
+        "properties": {
+          "type": {"type": "string", "format": "uri"},
+          "title": {"type": "string"},
+          "status": {"type": "integer", "minimum": 400, "maximum": 599},
+          "detail": {"type": "string"},
+          "code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+          "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+          "instance": {"type": "string"},
+          "errors": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,216 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cafetería - Servicio de menú",
+    "version": "0.1.0",
+    "description": "Contrato del catálogo de productos, precios y disponibilidad."
+  },
+  "servers": [
+    {"url": "http://localhost:8001", "description": "Desarrollo local"},
+    {"url": "http://svc-menu:8001", "description": "DNS interno de Kubernetes"}
+  ],
+  "tags": [
+    {"name": "operación"},
+    {"name": "productos"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "menuHealth",
+        "summary": "Comprueba el servicio y PostgreSQL",
+        "responses": {
+          "200": {
+            "description": "Servicio disponible",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "menuMetrics",
+        "summary": "Expone métricas para Prometheus",
+        "responses": {
+          "200": {
+            "description": "Métricas en formato Prometheus",
+            "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["productos"],
+        "operationId": "listProducts",
+        "summary": "Lista productos del menú",
+        "parameters": [
+          {"$ref": "#/components/parameters/RequestId"},
+          {
+            "name": "category",
+            "in": "query",
+            "description": "Categoría exacta; se omite para incluir todas.",
+            "schema": {"type": "string", "minLength": 1, "maxLength": 50}
+          },
+          {
+            "name": "available",
+            "in": "query",
+            "description": "Filtra por disponibilidad. El frontend usa true por defecto.",
+            "schema": {"type": "boolean", "default": true}
+          },
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/Offset"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de productos ordenada por id",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProductList"}}}
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/products/{product_id}": {
+      "get": {
+        "tags": ["productos"],
+        "operationId": "getProduct",
+        "summary": "Obtiene un producto",
+        "parameters": [
+          {"$ref": "#/components/parameters/ProductId"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Producto encontrado",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Product"}}}
+          },
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "ProductId": {
+        "name": "product_id",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "integer", "minimum": 1}
+      },
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": {"type": "integer", "minimum": 0, "default": 0}
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Identificador de correlación recibido o generado por el servicio.",
+        "schema": {"type": "string", "format": "uuid"}
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "Producto inexistente",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ValidationError": {
+        "description": "Parámetros inválidos",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ServiceUnavailable": {
+        "description": "PostgreSQL u otra dependencia crítica no está disponible",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      }
+    },
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "sku", "name", "description", "category", "price_cents", "currency", "available", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "integer", "minimum": 1, "examples": [1]},
+          "sku": {"type": "string", "pattern": "^[A-Z0-9-]{3,32}$", "examples": ["CAFE-LATTE"]},
+          "name": {"type": "string", "minLength": 1, "maxLength": 100, "examples": ["Latte"]},
+          "description": {"type": "string", "maxLength": 500, "examples": ["Espresso con leche vaporizada."]},
+          "category": {"type": "string", "minLength": 1, "maxLength": 50, "examples": ["bebidas-calientes"]},
+          "price_cents": {"type": "integer", "minimum": 0, "examples": [5500]},
+          "currency": {"type": "string", "const": "MXN"},
+          "available": {"type": "boolean", "examples": [true]},
+          "image_url": {"type": ["string", "null"], "format": "uri", "maxLength": 500},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/Product"}},
+          "total": {"type": "integer", "minimum": 0},
+          "limit": {"type": "integer", "minimum": 1},
+          "offset": {"type": "integer", "minimum": 0}
+        }
+      },
+      "DependencyHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status"],
+        "properties": {
+          "status": {"type": "string", "enum": ["up", "down"]},
+          "latency_ms": {"type": ["number", "null"], "minimum": 0}
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service", "status", "version", "dependencies"],
+        "properties": {
+          "service": {"type": "string", "const": "svc-menu"},
+          "status": {"type": "string", "enum": ["healthy", "degraded"]},
+          "version": {"type": "string", "examples": ["git-a1b2c3d"]},
+          "dependencies": {
+            "type": "object",
+            "required": ["postgres"],
+            "properties": {"postgres": {"$ref": "#/components/schemas/DependencyHealth"}}
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type", "title", "status", "detail", "code", "trace_id", "instance"],
+        "properties": {
+          "type": {"type": "string", "format": "uri"},
+          "title": {"type": "string"},
+          "status": {"type": "integer", "minimum": 400, "maximum": 599},
+          "detail": {"type": "string"},
+          "code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+          "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+          "instance": {"type": "string"},
+          "errors": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    }
+  }
+}

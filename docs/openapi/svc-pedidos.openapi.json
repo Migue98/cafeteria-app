@@ -1,0 +1,320 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Cafetería - Servicio de pedidos",
+    "version": "0.1.0",
+    "description": "Contrato para validar productos, calcular precios, confirmar pedidos y coordinar la asignación de puntos."
+  },
+  "servers": [
+    {"url": "http://localhost:8002", "description": "Desarrollo local"},
+    {"url": "http://svc-pedidos:8002", "description": "DNS interno de Kubernetes"}
+  ],
+  "tags": [
+    {"name": "operación"},
+    {"name": "pedidos"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "ordersHealth",
+        "summary": "Comprueba el servicio y sus dependencias",
+        "responses": {
+          "200": {
+            "description": "Servicio disponible; puede estar degraded si lealtad está caída",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": ["operación"],
+        "operationId": "ordersMetrics",
+        "summary": "Expone métricas para Prometheus",
+        "responses": {
+          "200": {
+            "description": "Métricas en formato Prometheus",
+            "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "tags": ["pedidos"],
+        "operationId": "createOrder",
+        "summary": "Crea y confirma un pedido",
+        "description": "Consulta nombres, disponibilidad y precios actuales en svc-menu. La falla de lealtad no revierte un pedido ya guardado: loyalty_status queda pending.",
+        "parameters": [
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CreateOrderRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "Pedido creado por primera vez",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
+          },
+          "200": {
+            "description": "Replay idempotente; devuelve el pedido original con replayed=true",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
+          },
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      },
+      "get": {
+        "tags": ["pedidos"],
+        "operationId": "listOrders",
+        "summary": "Lista pedidos de un cliente",
+        "parameters": [
+          {"$ref": "#/components/parameters/CustomerQuery"},
+          {"$ref": "#/components/parameters/Limit"},
+          {"$ref": "#/components/parameters/Offset"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Página de pedidos, del más reciente al más antiguo",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderList"}}}
+          },
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/orders/{order_id}": {
+      "get": {
+        "tags": ["pedidos"],
+        "operationId": "getOrder",
+        "summary": "Obtiene un pedido",
+        "parameters": [
+          {"$ref": "#/components/parameters/OrderId"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedido encontrado",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
+          },
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/orders/{order_id}/loyalty/retry": {
+      "post": {
+        "tags": ["pedidos"],
+        "operationId": "retryOrderLoyalty",
+        "summary": "Reintenta acreditar los puntos pendientes",
+        "description": "La acreditación en svc-lealtad sigue siendo idempotente por order_id. Si ya fue acreditada, sincroniza el resultado sin duplicar puntos.",
+        "parameters": [
+          {"$ref": "#/components/parameters/OrderId"},
+          {"$ref": "#/components/parameters/RequestId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado de lealtad actualizado o ya sincronizado",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
+          },
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/ValidationError"},
+          "503": {"$ref": "#/components/responses/LoyaltyUnavailable"}
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "OrderId": {
+        "name": "order_id",
+        "in": "path",
+        "required": true,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "CustomerQuery": {
+        "name": "customer_id",
+        "in": "query",
+        "required": true,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "RequestId": {
+        "name": "X-Request-ID",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Clave estable para reintentar la misma compra sin duplicar el pedido.",
+        "schema": {"type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9._:-]+$"}
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}
+      },
+      "Offset": {
+        "name": "offset",
+        "in": "query",
+        "schema": {"type": "integer", "minimum": 0, "default": 0}
+      }
+    },
+    "headers": {
+      "RequestId": {
+        "description": "Identificador de correlación recibido o generado por el servicio.",
+        "schema": {"type": "string", "format": "uuid"}
+      }
+    },
+    "responses": {
+      "NotFound": {
+        "description": "Pedido inexistente",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "Conflict": {
+        "description": "Producto no disponible o clave de idempotencia reutilizada con otro cuerpo",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ValidationError": {
+        "description": "Solicitud inválida, incluyendo productos repetidos",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "ServiceUnavailable": {
+        "description": "PostgreSQL o svc-menu no está disponible; no se crea el pedido",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      },
+      "LoyaltyUnavailable": {
+        "description": "svc-lealtad continúa sin estar disponible; el pedido permanece confirmado y pendiente",
+        "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
+      }
+    },
+    "schemas": {
+      "CreateOrderItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["product_id", "quantity"],
+        "properties": {
+          "product_id": {"type": "integer", "minimum": 1},
+          "quantity": {"type": "integer", "minimum": 1, "maximum": 20}
+        }
+      },
+      "CreateOrderRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["customer_id", "items"],
+        "properties": {
+          "customer_id": {"type": "string", "format": "uuid"},
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {"$ref": "#/components/schemas/CreateOrderItem"},
+            "description": "product_id no puede repetirse; el frontend consolida cantidades."
+          }
+        }
+      },
+      "OrderItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["product_id", "sku", "product_name", "quantity", "unit_price_cents", "line_total_cents"],
+        "properties": {
+          "product_id": {"type": "integer", "minimum": 1},
+          "sku": {"type": "string"},
+          "product_name": {"type": "string"},
+          "quantity": {"type": "integer", "minimum": 1},
+          "unit_price_cents": {"type": "integer", "minimum": 0},
+          "line_total_cents": {"type": "integer", "minimum": 0}
+        }
+      },
+      "Order": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "customer_id", "status", "loyalty_status", "currency", "subtotal_cents", "total_cents", "items", "replayed", "created_at", "updated_at"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "customer_id": {"type": "string", "format": "uuid"},
+          "status": {"type": "string", "enum": ["confirmed"]},
+          "loyalty_status": {"type": "string", "enum": ["awarded", "pending"]},
+          "points_earned": {"type": ["integer", "null"], "minimum": 0},
+          "currency": {"type": "string", "const": "MXN"},
+          "subtotal_cents": {"type": "integer", "minimum": 0},
+          "total_cents": {"type": "integer", "minimum": 0},
+          "items": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/OrderItem"}},
+          "replayed": {"type": "boolean"},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "OrderList": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["items", "total", "limit", "offset"],
+        "properties": {
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/Order"}},
+          "total": {"type": "integer", "minimum": 0},
+          "limit": {"type": "integer", "minimum": 1},
+          "offset": {"type": "integer", "minimum": 0}
+        }
+      },
+      "DependencyHealth": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "critical"],
+        "properties": {
+          "status": {"type": "string", "enum": ["up", "down"]},
+          "critical": {"type": "boolean"},
+          "latency_ms": {"type": ["number", "null"], "minimum": 0}
+        }
+      },
+      "HealthResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["service", "status", "version", "dependencies"],
+        "properties": {
+          "service": {"type": "string", "const": "svc-pedidos"},
+          "status": {"type": "string", "enum": ["healthy", "degraded"]},
+          "version": {"type": "string", "examples": ["git-a1b2c3d"]},
+          "dependencies": {
+            "type": "object",
+            "required": ["postgres", "menu", "loyalty"],
+            "properties": {
+              "postgres": {"$ref": "#/components/schemas/DependencyHealth"},
+              "menu": {"$ref": "#/components/schemas/DependencyHealth"},
+              "loyalty": {"$ref": "#/components/schemas/DependencyHealth"}
+            }
+          }
+        }
+      },
+      "Problem": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["type", "title", "status", "detail", "code", "trace_id", "instance"],
+        "properties": {
+          "type": {"type": "string", "format": "uri"},
+          "title": {"type": "string"},
+          "status": {"type": "integer", "minimum": 400, "maximum": 599},
+          "detail": {"type": "string"},
+          "code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+          "trace_id": {"type": "string", "pattern": "^[a-f0-9]{32}$"},
+          "instance": {"type": "string"},
+          "errors": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    }
+  }
+}
