@@ -1,37 +1,124 @@
-# Cafetería — aplicación
+# Cafetería en línea — aplicación
 
-Código, contratos, pruebas y automatización de construcción de la cafetería en
-línea del proyecto final de DevOps.
+Aplicación de referencia para el proyecto final de DevOps. El sistema permite
+consultar un menú, armar un carrito, confirmar pedidos y acumular puntos de
+lealtad. La prioridad del proyecto es demostrar un ciclo completo de desarrollo,
+construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
-El estado deseado de Kubernetes se mantiene separado en
-[`Migue98/cafeteria-gitops`](https://github.com/Migue98/cafeteria-gitops). Esta
-separación permite que Tekton publique imágenes y actualice GitOps, mientras
-Argo CD conserva la responsabilidad exclusiva de desplegar al clúster.
+> **Estado actual:** contratos OpenAPI y estructura inicial definidos. Los
+> microservicios todavía no tienen una implementación ejecutable.
+
+## Repositorios
+
+| Repositorio | Responsabilidad |
+|---|---|
+| [`cafeteria-app`](https://github.com/Migue98/cafeteria-app) | Código fuente, pruebas, Containerfiles, contratos OpenAPI y pipelines de Tekton. |
+| [`cafeteria-gitops`](https://github.com/Migue98/cafeteria-gitops) | Estado deseado de Kubernetes, overlays, Argo CD y observabilidad. |
+
+Tekton construirá imágenes inmutables identificadas por SHA y actualizará el
+repositorio GitOps. Argo CD será el único componente autorizado para aplicar el
+estado deseado al clúster.
+
+## Equipo
+
+| Integrante | GitHub |
+|---|---|
+| Miguel Alberto Bazán Silva | [`@Migue98`](https://github.com/Migue98) |
+| González Nava Alicia Aislinn | [`@aliceaislinn`](https://github.com/aliceaislinn) |
+| Quintero Rubio Martín | Pendiente de confirmar |
+
+Las responsabilidades concretas se asignarán mediante Issues y Pull Requests;
+la tabla no implica propiedad exclusiva sobre componentes.
+
+## Arquitectura funcional
+
+```mermaid
+flowchart LR
+    U[Usuario] --> F[frontend]
+    F --> M[svc-menu]
+    F --> P[svc-pedidos]
+    P --> M
+    P --> L[svc-lealtad]
+    M --> DB[(PostgreSQL)]
+    P --> DB
+    L --> DB
+```
+
+| Componente | Responsabilidad |
+|---|---|
+| `frontend` | Menú, carrito, confirmación del pedido y consulta de puntos. |
+| `svc-menu` | Productos, precios y disponibilidad. |
+| `svc-pedidos` | Creación, persistencia y consulta de pedidos. |
+| `svc-lealtad` | Movimientos y saldo de puntos por cliente. |
+| PostgreSQL | Persistencia; no cuenta como microservicio. |
+
+Los detalles están en la [arquitectura](docs/architecture.md) y la
+[especificación funcional](docs/application-specification.md).
+
+## Contratos HTTP
+
+- OpenAPI 3.1 es la fuente de verdad de los tres backends.
+- Las rutas de negocio usan `/api/v1`.
+- Todos los servicios exponen `GET /health` y `GET /metrics`.
+- Los importes se expresan en centavos enteros y moneda MXN.
+- Los errores usan `application/problem+json`.
+- La creación de pedidos y la acreditación de puntos requieren
+  `Idempotency-Key`.
+
+Los archivos fuente, convenciones y ejemplos están en
+[`docs/openapi/`](docs/openapi/README.md).
 
 ## Estructura
 
-- [`frontend/`](frontend/README.md).
-- [`svc-menu/`](svc-menu/README.md).
-- [`svc-pedidos/`](svc-pedidos/README.md).
-- [`svc-lealtad/`](svc-lealtad/README.md).
-- [`tests/`](tests/README.md), para pruebas integrales y contratos.
-- [`tekton/`](tekton/README.md), para Tasks, Pipeline y Triggers.
-- [`docs/openapi/`](docs/openapi/README.md), contratos versionados de los backends.
+```text
+.
+├── frontend/          # Interfaz web
+├── svc-menu/          # Catálogo y disponibilidad
+├── svc-pedidos/       # Pedidos y totales
+├── svc-lealtad/       # Puntos y movimientos
+├── tests/             # Pruebas integrales y de contratos
+├── tekton/            # Tasks, Pipeline y Triggers
+├── docs/              # Arquitectura, decisiones y OpenAPI
+└── scripts/           # Validaciones auxiliares
+```
 
-Cada servicio tendrá `src/`, `tests/`, `requirements.txt`, `Containerfile`, `.dockerignore` y README cuando comience la implementación.
+Cada servicio incorporará `src/`, `tests/`, `requirements.txt`,
+`Containerfile`, `.dockerignore` y su documentación operativa cuando comience
+la implementación.
 
-## Convenciones
+## Validación disponible
 
-- Python tipado y FastAPI.
-- Pruebas con pytest.
-- Formato y validación automatizados antes de construir.
-- Imágenes con usuario no root y tag SHA.
-- `/health`, `/metrics`, logs JSON y OpenTelemetry desde la primera versión.
-
-Antes de implementar un endpoint se modifica y valida su contrato OpenAPI. Los cambios incompatibles requieren una nueva versión de la API.
-
-## Validar los contratos
+Requisito: Python 3.11 o posterior. El validador actual solo utiliza la
+biblioteca estándar.
 
 ```bash
+git clone https://github.com/Migue98/cafeteria-app.git
+cd cafeteria-app
 python scripts/validate_contracts.py
 ```
+
+El comando debe finalizar con `Contratos válidos: 3`.
+
+## Forma de trabajo
+
+1. Crear o elegir un Issue con alcance y criterio de aceptación.
+2. Crear una rama corta desde `main`: `feat/...`, `fix/...`, `docs/...` o
+   `ops/...`.
+3. Actualizar primero el contrato OpenAPI si cambia una interfaz HTTP.
+4. Ejecutar las validaciones relacionadas y abrir un Pull Request.
+5. Solicitar al menos una revisión antes de integrar a `main`.
+
+No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
+`.env`. Consulta [CONTRIBUTING.md](CONTRIBUTING.md) antes de comenzar.
+
+## Documentación
+
+- [Índice de documentación](docs/README.md)
+- [Plan de implementación](docs/implementation-plan.md)
+- [ADR-001: stack inicial](docs/decisions/ADR-001-stack.md)
+- [ADR-002: contratos HTTP](docs/decisions/ADR-002-api-contracts.md)
+
+## Siguiente hito
+
+Implementar `svc-menu` como primer flujo ejecutable: FastAPI, `/health`,
+`/metrics`, catálogo inicial, pruebas y `Containerfile` sin privilegios.
