@@ -5,8 +5,9 @@ consultar un menú, armar un carrito, confirmar pedidos y acumular puntos de
 lealtad. La prioridad del proyecto es demostrar un ciclo completo de desarrollo,
 construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
-> **Estado actual:** contratos OpenAPI y estructura inicial definidos. Los
-> microservicios todavía no tienen una implementación ejecutable.
+> **Estado actual:** `svc-menu` cuenta con un MVP ejecutable, pruebas y entorno
+> contenedorizado con PostgreSQL. `svc-pedidos`, `svc-lealtad` y `frontend`
+> conservan por ahora su contrato y estructura inicial.
 
 ## Repositorios
 
@@ -99,6 +100,16 @@ python scripts/validate_contracts.py
 
 El comando debe finalizar con `Contratos válidos: 3`.
 
+Para validar el servicio implementado:
+
+```bash
+cd svc-menu
+python -m pip install -r requirements-dev.txt
+python -m pytest -p no:cacheprovider
+ruff check app tests
+ruff format --check app tests
+```
+
 ## Forma de trabajo
 
 1. Crear o elegir un Issue con alcance y criterio de aceptación.
@@ -120,5 +131,5 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Implementar `svc-menu` como primer flujo ejecutable: FastAPI, `/health`,
-`/metrics`, catálogo inicial, pruebas y `Containerfile` sin privilegios.
+Integrar el MVP de `svc-menu` y usar su patrón operativo para implementar
+`svc-pedidos`: contrato, persistencia, idempotencia, métricas y pruebas.
