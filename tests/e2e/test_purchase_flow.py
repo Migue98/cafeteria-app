@@ -1,0 +1,189 @@
+"""Pruebas end-to-end del flujo menú -> pedido -> lealtad -> persistencia."""
+
+from __future__ import annotations
+
+import subprocess
+from uuid import uuid4
+
+import pytest
+
+from .conftest import ApiClient
+
+
+pytestmark = pytest.mark.e2e
+
+
+def order_payload(customer_id: str, *, product_id: int = 1, quantity: int = 2) -> dict:
+    return {
+        "customer_id": customer_id,
+        "items": [{"product_id": product_id, "quantity": quantity}],
+    }
+
+
+def create_order(api: ApiClient, payload: dict, key: str | None = None):
+    return api.json(
+        "POST",
+        f"{api.orders_url}/api/v1/orders",
+        payload=payload,
+        headers={"Idempotency-Key": key or f"e2e-order-{uuid4()}"},
+    )
+
+
+def test_health_and_request_correlation(api: ApiClient) -> None:
+    request_id = str(uuid4())
+    expected_services = {
+        api.menu_url: "svc-menu",
+        api.orders_url: "svc-pedidos",
+        api.loyalty_url: "svc-lealtad",
+    }
+
+    for url, service in expected_services.items():
+        result = api.json("GET", f"{url}/health", headers={"X-Request-ID": request_id})
+        assert result.status == 200
+        assert result.body["service"] == service
+        assert result.body["status"] == "healthy"
+        assert result.headers["x-request-id"] == request_id
+
+
+def test_complete_purchase_uses_menu_prices_and_awards_points(api: ApiClient) -> None:
+    menu = api.json(
+        "GET",
+        f"{api.menu_url}/api/v1/products",
+        query={"available": "true", "limit": 20},
+    )
+    assert menu.status == 200
+    assert menu.body["total"] == 20
+
+    customer_id = str(uuid4())
+    payload = {
+        "customer_id": customer_id,
+        "items": [
+            {"product_id": 1, "quantity": 2},
+            {"product_id": 11, "quantity": 1},
+        ],
+    }
+    created = create_order(api, payload)
+
+    assert created.status == 201
+    assert created.body["status"] == "confirmed"
+    assert created.body["loyalty_status"] == "awarded"
+    assert created.body["subtotal_cents"] == 10900
+    assert created.body["total_cents"] == 10900
+    assert created.body["points_earned"] == 10
+    assert [item["unit_price_cents"] for item in created.body["items"]] == [3500, 3900]
+
+    fetched = api.json("GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}")
+    listed = api.json(
+        "GET",
+        f"{api.orders_url}/api/v1/orders",
+        query={"customer_id": customer_id},
+    )
+    balance = api.json(
+        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
+    )
+    assert fetched.status == 200 and fetched.body["id"] == created.body["id"]
+    assert listed.status == 200 and listed.body["total"] == 1
+    assert balance.status == 200 and balance.body["balance"] == 10
+
+
+def test_order_idempotency_does_not_duplicate_order_or_points(api: ApiClient) -> None:
+    customer_id = str(uuid4())
+    payload = order_payload(customer_id)
+    key = f"e2e-idempotency-{uuid4()}"
+
+    first = create_order(api, payload, key)
+    replay = create_order(api, payload, key)
+    listed = api.json(
+        "GET",
+        f"{api.orders_url}/api/v1/orders",
+        query={"customer_id": customer_id},
+    )
+    balance = api.json(
+        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
+    )
+
+    assert first.status == 201
+    assert replay.status == 200
+    assert replay.body["id"] == first.body["id"]
+    assert replay.body["replayed"] is True
+    assert listed.body["total"] == 1
+    assert balance.body["balance"] == 7
+
+
+def test_reused_idempotency_key_with_different_body_conflicts(api: ApiClient) -> None:
+    customer_id = str(uuid4())
+    key = f"e2e-conflict-{uuid4()}"
+    first = create_order(api, order_payload(customer_id, quantity=1), key)
+    conflict = create_order(api, order_payload(customer_id, quantity=2), key)
+
+    assert first.status == 201
+    assert conflict.status == 409
+    assert conflict.headers["content-type"].startswith("application/problem+json")
+    assert conflict.body["code"] == "IDEMPOTENCY_KEY_REUSED"
+
+
+def test_validation_rejects_duplicate_products(api: ApiClient) -> None:
+    payload = {
+        "customer_id": str(uuid4()),
+        "items": [
+            {"product_id": 1, "quantity": 1},
+            {"product_id": 1, "quantity": 2},
+        ],
+    }
+    result = create_order(api, payload)
+
+    assert result.status == 422
+    assert result.body["code"] == "VALIDATION_ERROR"
+    assert result.headers["content-type"].startswith("application/problem+json")
+
+
+def test_missing_and_unavailable_products_are_rejected(
+    api: ApiClient, set_product_availability
+) -> None:
+    missing = create_order(api, order_payload(str(uuid4()), product_id=999))
+    assert missing.status == 409
+    assert missing.body["code"] == "PRODUCT_UNAVAILABLE"
+
+    set_product_availability(20, False)
+    unavailable = create_order(api, order_payload(str(uuid4()), product_id=20))
+    assert unavailable.status == 409
+    assert unavailable.body["code"] == "PRODUCT_UNAVAILABLE"
+
+
+def test_metrics_expose_business_and_http_signals(api: ApiClient) -> None:
+    create_order(api, order_payload(str(uuid4()), quantity=1))
+    expected = {
+        api.menu_url: ("http_requests_total",),
+        api.orders_url: ("http_requests_total", "cafe_orders_total", "cafe_order_value_cents_total"),
+        api.loyalty_url: ("http_requests_total", "cafe_loyalty_points_total", "cafe_loyalty_awards_total"),
+    }
+
+    for url, metrics in expected.items():
+        response = api.text(f"{url}/metrics")
+        assert response.status == 200
+        for metric in metrics:
+            assert metric in response.body
+
+
+def test_data_survives_postgres_restart(
+    api: ApiClient, compose_command: list[str]
+) -> None:
+    customer_id = str(uuid4())
+    created = create_order(api, order_payload(customer_id, quantity=1))
+    assert created.status == 201
+    order_id = created.body["id"]
+
+    subprocess.run(
+        [*compose_command, "restart", "postgres"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    api.wait_until_healthy(timeout_seconds=90)
+
+    fetched = api.json("GET", f"{api.orders_url}/api/v1/orders/{order_id}")
+    balance = api.json(
+        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
+    )
+    assert fetched.status == 200 and fetched.body["id"] == order_id
+    assert balance.status == 200 and balance.body["balance"] == 3

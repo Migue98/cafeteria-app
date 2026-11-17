@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cafeteria}
+      POSTGRES_USER: ${POSTGRES_USER:-cafeteria}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cafeteria}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-cafeteria} -d ${POSTGRES_DB:-cafeteria}
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - cafeteria-postgres-data:/var/lib/postgresql/data
+      - ./svc-menu/db/init.sql:/docker-entrypoint-initdb.d/001-menu.sql:ro
+      - ./svc-pedidos/db/init.sql:/docker-entrypoint-initdb.d/002-orders.sql:ro
+      - ./svc-lealtad/db/init.sql:/docker-entrypoint-initdb.d/003-loyalty.sql:ro
+
+  svc-menu:
+    build:
+      context: ./svc-menu
+      dockerfile: Containerfile
+    environment:
+      APP_VERSION: ${APP_VERSION:-local}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${MENU_PORT:-8001}:8001"
+
+  svc-lealtad:
+    build:
+      context: ./svc-lealtad
+      dockerfile: Containerfile
+    environment:
+      APP_VERSION: ${APP_VERSION:-local}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${LOYALTY_PORT:-8003}:8003"
+
+  svc-pedidos:
+    build:
+      context: ./svc-pedidos
+      dockerfile: Containerfile
+    environment:
+      APP_VERSION: ${APP_VERSION:-local}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
+      MENU_URL: http://svc-menu:8001
+      LOYALTY_URL: http://svc-lealtad:8003
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      svc-menu:
+        condition: service_healthy
+      svc-lealtad:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=2)
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${ORDERS_PORT:-8002}:8002"
+
+volumes:
+  cafeteria-postgres-data:

@@ -77,15 +77,27 @@ Los archivos fuente, convenciones y ejemplos están en
 ├── svc-menu/          # Catálogo y disponibilidad
 ├── svc-pedidos/       # Pedidos y totales
 ├── svc-lealtad/       # Puntos y movimientos
+├── compose.yaml       # Integración local de PostgreSQL y los tres backends
 ├── tests/             # Pruebas integrales y de contratos
 ├── tekton/            # Tasks, Pipeline y Triggers
 ├── docs/              # Arquitectura, decisiones y OpenAPI
 └── scripts/           # Validaciones auxiliares
 ```
 
-Cada servicio incorporará `src/`, `tests/`, `requirements.txt`,
-`Containerfile`, `.dockerignore` y su documentación operativa cuando comience
-la implementación.
+Cada backend contiene su aplicación, pruebas, dependencias, `Containerfile`,
+`.dockerignore`, Compose individual y documentación operativa.
+
+## Integración local
+
+```bash
+podman compose up --build --detach
+python scripts/smoke_compose.py
+podman compose down
+```
+
+El Compose raíz levanta PostgreSQL y los tres backends. Consulta la
+[guía de integración local](docs/local-integration.md) para ver puertos,
+configuración, prueba completa y limpieza del volumen.
 
 ## Validación disponible
 
@@ -99,6 +111,18 @@ python scripts/validate_contracts.py
 ```
 
 El comando debe finalizar con `Contratos válidos: 3`.
+
+Para recorrer los tres servicios y PostgreSQL de extremo a extremo en un
+Compose aislado:
+
+```bash
+python -m pip install -r tests/requirements.txt
+python scripts/run_e2e.py
+```
+
+La suite cubre compra, precios, puntos, idempotencia, errores, métricas y
+persistencia tras reiniciar PostgreSQL. Los detalles están en
+[`tests/README.md`](tests/README.md).
 
 Para validar el servicio implementado:
 
@@ -126,10 +150,11 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 - [Índice de documentación](docs/README.md)
 - [Plan de implementación](docs/implementation-plan.md)
+- [Integración local](docs/local-integration.md)
 - [ADR-001: stack inicial](docs/decisions/ADR-001-stack.md)
 - [ADR-002: contratos HTTP](docs/decisions/ADR-002-api-contracts.md)
 
 ## Siguiente hito
 
-Integrar los tres backends en un único entorno local y comenzar el frontend con
-el flujo menú → carrito → pedido → puntos.
+Comenzar el frontend con el flujo menú → carrito → pedido → puntos, consumiendo
+el entorno integrado de los tres backends.
