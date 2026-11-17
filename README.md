@@ -5,8 +5,8 @@ consultar un menú, armar un carrito, confirmar pedidos y acumular puntos de
 lealtad. La prioridad del proyecto es demostrar un ciclo completo de desarrollo,
 construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
-> **Estado actual:** `svc-menu` cuenta con un MVP ejecutable, pruebas y entorno
-> contenedorizado con PostgreSQL. `svc-pedidos`, `svc-lealtad` y `frontend`
+> **Estado actual:** `svc-menu` y `svc-pedidos` cuentan con MVP ejecutable,
+> pruebas y entorno contenedorizado con PostgreSQL. `svc-lealtad` y `frontend`
 > conservan por ahora su contrato y estructura inicial.
 
 ## Repositorios
@@ -131,5 +131,5 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Integrar el MVP de `svc-menu` y usar su patrón operativo para implementar
-`svc-pedidos`: contrato, persistencia, idempotencia, métricas y pruebas.
+Implementar `svc-lealtad` con acreditación idempotente y recuperación de puntos
+pendientes, completando el flujo backend antes de iniciar el frontend.

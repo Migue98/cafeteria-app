@@ -1,0 +1,50 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: cafeteria
+      POSTGRES_USER: cafeteria
+      POSTGRES_PASSWORD: cafeteria
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cafeteria -d cafeteria"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - orders-postgres-data:/var/lib/postgresql/data
+      - ../svc-menu/db/init.sql:/docker-entrypoint-initdb.d/001-menu.sql:ro
+      - ./db/init.sql:/docker-entrypoint-initdb.d/002-orders.sql:ro
+
+  svc-menu:
+    build:
+      context: ../svc-menu
+      dockerfile: Containerfile
+    environment:
+      APP_VERSION: local
+      DATABASE_URL: postgresql://cafeteria:cafeteria@postgres:5432/cafeteria
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8001:8001"
+
+  svc-pedidos:
+    build:
+      context: .
+      dockerfile: Containerfile
+    environment:
+      APP_VERSION: local
+      DATABASE_URL: postgresql://cafeteria:cafeteria@postgres:5432/cafeteria
+      MENU_URL: http://svc-menu:8001
+      LOYALTY_URL: http://svc-lealtad:8003
+      HTTP_TIMEOUT_SECONDS: "1"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      svc-menu:
+        condition: service_started
+    ports:
+      - "8002:8002"
+
+volumes:
+  orders-postgres-data:
