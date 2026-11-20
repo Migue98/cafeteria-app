@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block title %}Algo salió mal · Café Nube{% endblock %}
+
+{% block content %}
+<main class="centered-page">
+  <section class="error-card">
+    <span class="error-code">{{ code }}</span>
+    <h1>No pudimos servir esta página.</h1>
+    <p>{{ message }}</p>
+    <a class="button button-primary" href="/">Intentar de nuevo</a>
+  </section>
+</main>
+{% endblock %}

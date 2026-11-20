@@ -7,12 +7,13 @@ import os
 import shlex
 import subprocess
 import time
+from http.cookiejar import CookieJar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 
 import pytest
 
@@ -26,6 +27,7 @@ class HttpResult:
 
 class ApiClient:
     def __init__(self) -> None:
+        self.frontend_url = os.getenv("E2E_FRONTEND_URL", "http://localhost:18000")
         self.menu_url = os.getenv("E2E_MENU_URL", "http://localhost:18001")
         self.orders_url = os.getenv("E2E_ORDERS_URL", "http://localhost:18002")
         self.loyalty_url = os.getenv("E2E_LOYALTY_URL", "http://localhost:18003")
@@ -78,6 +80,7 @@ class ApiClient:
 
     def wait_until_healthy(self, timeout_seconds: int = 90) -> None:
         services = {
+            "frontend": self.frontend_url,
             "menu": self.menu_url,
             "orders": self.orders_url,
             "loyalty": self.loyalty_url,
@@ -102,11 +105,33 @@ class ApiClient:
             pytest.fail(f"Servicios sin salud: {sorted(pending)}; último error: {last_errors}")
 
 
+class BrowserSession:
+    """Navegador HTTP mínimo con cookies y seguimiento de redirecciones."""
+
+    def __init__(self) -> None:
+        self._opener = build_opener(HTTPCookieProcessor(CookieJar()))
+
+    def request(self, method: str, url: str) -> HttpResult:
+        data = b"" if method != "GET" else None
+        request = Request(url, data=data, method=method)
+        with self._opener.open(request, timeout=10) as response:
+            return HttpResult(
+                response.status,
+                {key.lower(): value for key, value in response.headers.items()},
+                response.read().decode(),
+            )
+
+
 @pytest.fixture(scope="session")
 def api() -> ApiClient:
     client = ApiClient()
     client.wait_until_healthy()
     return client
+
+
+@pytest.fixture
+def browser() -> BrowserSession:
+    return BrowserSession()
 
 
 @pytest.fixture(scope="session")

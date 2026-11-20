@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Menú · Café Nube{% endblock %}
+
+{% block content %}
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow">Tu pausa, bien preparada</p>
+      <h1 id="hero-title">Café rico.<br><em>Cero complicaciones.</em></h1>
+      <p class="hero-description">Elige algo del menú, arma tu pedido y acumula puntos con cada visita.</p>
+      <a class="button button-light" href="#menu">Ver el menú</a>
+    </div>
+    <div class="hero-art" aria-hidden="true">
+      <span class="sun"></span>
+      <span class="steam steam-one"></span>
+      <span class="steam steam-two"></span>
+      <div class="cup"><span></span></div>
+      <div class="saucer"></div>
+      <p>momentos<br><strong>que saben bien</strong></p>
+    </div>
+    <div class="points-card">
+      <span>Tu saldo</span>
+      {% if balance_available %}
+      <strong>{{ balance }}</strong>
+      <small>puntos disponibles</small>
+      {% else %}
+      <strong>—</strong>
+      <small>Saldo temporalmente no disponible</small>
+      {% endif %}
+    </div>
+  </section>
+
+  {% if checkout_error %}
+  <div class="alert" role="alert">
+    <strong>No pudimos confirmar el pedido.</strong>
+    <span>{{ checkout_error }}</span>
+  </div>
+  {% endif %}
+
+  <section class="menu-shell" id="menu" aria-labelledby="menu-title">
+    <div class="menu-main">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow eyebrow-dark">Preparado al momento</p>
+          <h2 id="menu-title">¿Qué se te antoja?</h2>
+        </div>
+        <p>{{ products|length }} opciones disponibles</p>
+      </div>
+
+      <nav class="category-list" aria-label="Categorías del menú">
+        <a class="chip {% if not selected_category %}active{% endif %}" href="/">Todo</a>
+        {% for category in categories %}
+        <a class="chip {% if selected_category == category %}active{% endif %}" href="/?category={{ category }}#menu">
+          {{ category|replace('-', ' ')|title }}
+        </a>
+        {% endfor %}
+      </nav>
+
+      {% if products %}
+      <div class="product-grid">
+        {% for product in products %}
+        <article class="product-card">
+          <div class="product-visual category-{{ product.category }}">
+            <span>{{ product.category|replace('-', ' ') }}</span>
+            <svg viewBox="0 0 120 100" aria-hidden="true">
+              {% if 'bebidas' in product.category %}
+              <path d="M28 29h58v36a25 25 0 0 1-25 25h-8a25 25 0 0 1-25-25V29Z"/>
+              <path d="M86 39h7a14 14 0 0 1 0 28h-7M45 21c0-7 7-7 7-14M65 21c0-7 7-7 7-14"/>
+              {% elif product.category == 'panaderia' %}
+              <path d="M18 70c8-35 27-53 42-53s34 18 42 53c-12 12-25 18-42 18S30 82 18 70Z"/>
+              <path d="M37 62c6-17 14-27 23-33M60 29c10 6 18 17 23 33"/>
+              {% elif product.category == 'postres' %}
+              <path d="m25 52 39-34 31 34v34H25V52Z"/>
+              <path d="M25 52h70M64 18v68"/>
+              {% else %}
+              <path d="M19 53h82c-4 22-18 34-41 34S23 75 19 53Z"/>
+              <path d="M30 45c7-18 18-27 30-27s23 9 30 27M38 36h44"/>
+              {% endif %}
+            </svg>
+          </div>
+          <div class="product-body">
+            <div class="product-meta">
+              <span>{{ product.category|replace('-', ' ') }}</span>
+              <strong>{{ product.price_cents|money }}</strong>
+            </div>
+            <h3>{{ product.name }}</h3>
+            <p>{{ product.description }}</p>
+            <form method="post" action="/cart/items/{{ product.id }}"
+                  hx-post="/cart/items/{{ product.id }}"
+                  hx-target="#cart-panel" hx-swap="outerHTML">
+              <button class="button button-add" type="submit">Agregar al carrito</button>
+            </form>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <strong>No encontramos productos en esta categoría.</strong>
+        <a href="/">Volver a todo el menú</a>
+      </div>
+      {% endif %}
+    </div>
+
+    {% include "_cart.html" %}
+  </section>
+</main>
+{% endblock %}

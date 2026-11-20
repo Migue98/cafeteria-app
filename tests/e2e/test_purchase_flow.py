@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from .conftest import ApiClient
+from .conftest import ApiClient, BrowserSession
 
 
 pytestmark = pytest.mark.e2e
@@ -32,6 +32,7 @@ def create_order(api: ApiClient, payload: dict, key: str | None = None):
 def test_health_and_request_correlation(api: ApiClient) -> None:
     request_id = str(uuid4())
     expected_services = {
+        api.frontend_url: "frontend",
         api.menu_url: "svc-menu",
         api.orders_url: "svc-pedidos",
         api.loyalty_url: "svc-lealtad",
@@ -84,6 +85,30 @@ def test_complete_purchase_uses_menu_prices_and_awards_points(api: ApiClient) ->
     assert fetched.status == 200 and fetched.body["id"] == created.body["id"]
     assert listed.status == 200 and listed.body["total"] == 1
     assert balance.status == 200 and balance.body["balance"] == 10
+
+
+def test_browser_completes_purchase_and_opens_history(
+    api: ApiClient, browser: BrowserSession
+) -> None:
+    home = browser.request("GET", f"{api.frontend_url}/")
+    assert home.status == 200
+    assert "Café americano" in home.body
+    assert "Croissant" in home.body
+
+    browser.request("POST", f"{api.frontend_url}/cart/items/1")
+    browser.request("POST", f"{api.frontend_url}/cart/items/1")
+    browser.request("POST", f"{api.frontend_url}/cart/items/11")
+    receipt = browser.request("POST", f"{api.frontend_url}/checkout")
+
+    assert receipt.status == 200
+    assert "Pedido confirmado" in receipt.body
+    assert "$109.00" in receipt.body
+    assert "+10 puntos" in receipt.body
+
+    history = browser.request("GET", f"{api.frontend_url}/orders")
+    assert history.status == 200
+    assert "Café americano" in history.body
+    assert "Croissant" in history.body
 
 
 def test_order_idempotency_does_not_duplicate_order_or_points(api: ApiClient) -> None:
@@ -153,6 +178,7 @@ def test_missing_and_unavailable_products_are_rejected(
 def test_metrics_expose_business_and_http_signals(api: ApiClient) -> None:
     create_order(api, order_payload(str(uuid4()), quantity=1))
     expected = {
+        api.frontend_url: ("http_requests_total",),
         api.menu_url: ("http_requests_total",),
         api.orders_url: ("http_requests_total", "cafe_orders_total", "cafe_order_value_cents_total"),
         api.loyalty_url: ("http_requests_total", "cafe_loyalty_points_total", "cafe_loyalty_awards_total"),

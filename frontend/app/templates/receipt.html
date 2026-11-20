@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Pedido confirmado · Café Nube{% endblock %}
+
+{% block content %}
+<main class="centered-page">
+  <section class="receipt" data-order-id="{{ order.id }}">
+    <div class="success-mark" aria-hidden="true">✓</div>
+    <p class="eyebrow eyebrow-dark">Pedido confirmado</p>
+    <h1>Ya lo estamos preparando.</h1>
+    <p class="receipt-lead">Guardamos tu pedido y te avisamos cuántos puntos sumaste.</p>
+
+    <div class="receipt-number">
+      <span>Número de pedido</span>
+      <strong>{{ order.id }}</strong>
+    </div>
+
+    <div class="receipt-items">
+      {% for item in order['items'] %}
+      <div>
+        <span>{{ item.quantity }} × {{ item.product_name }}</span>
+        <strong>{{ item.line_total_cents|money }}</strong>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="receipt-total">
+      <span>Total pagado</span>
+      <strong>{{ order.total_cents|money }}</strong>
+    </div>
+
+    <div class="points-earned {% if order.loyalty_status == 'pending' %}pending{% endif %}">
+      {% if order.loyalty_status == 'awarded' %}
+      <span>+{{ order.points_earned }} puntos</span>
+      <p>{% if balance is not none %}Tu nuevo saldo es de {{ balance }} puntos.{% else %}Tus puntos fueron acreditados.{% endif %}</p>
+      {% else %}
+      <span>Puntos pendientes</span>
+      <p>El pedido quedó confirmado. Volveremos a intentar la acreditación.</p>
+      {% endif %}
+    </div>
+
+    <div class="receipt-actions">
+      <a class="button button-primary" href="/">Pedir algo más</a>
+      <a class="button button-secondary" href="/orders">Ver mis pedidos</a>
+    </div>
+  </section>
+</main>
+{% endblock %}

@@ -1,0 +1,49 @@
+name: frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            frontend/requirements.txt
+            frontend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint and check formatting
+        run: |
+          ruff check app tests
+          ruff format --check app tests
+
+      - name: Run tests
+        run: python -m pytest -p no:cacheprovider
+
+      - name: Build container image
+        run: docker build -f Containerfile -t cafeteria-frontend:${{ github.sha }} .

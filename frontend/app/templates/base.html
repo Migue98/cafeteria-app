@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Menú y pedidos de Café Nube.">
+    <title>{% block title %}Café Nube{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}">
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="/" aria-label="Ir al menú de Café Nube">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 48 48" role="img">
+            <path d="M13 14h23v13a11 11 0 0 1-11 11h-1a11 11 0 0 1-11-11V14Z"/>
+            <path d="M36 18h3a6 6 0 0 1 0 12h-3M18 9c0-3 3-3 3-6M27 9c0-3 3-3 3-6"/>
+          </svg>
+        </span>
+        <span><strong>Café Nube</strong><small>Hecho cerca. Servido fácil.</small></span>
+      </a>
+      <nav aria-label="Navegación principal">
+        <a href="/">Menú</a>
+        <a href="/orders">Mis pedidos</a>
+        <a class="nav-cart" href="/#cart-panel">Carrito</a>
+      </nav>
+    </header>
+
+    {% block content %}{% endblock %}
+
+    <footer class="site-footer">
+      <p>Café Nube · Proyecto DevOps</p>
+      <p>Menú, pedidos y lealtad conectados en tiempo real.</p>
+    </footer>
+  </body>
+</html>

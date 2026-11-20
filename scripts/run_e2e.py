@@ -25,6 +25,7 @@ def main() -> int:
     compose_env = os.environ.copy()
     compose_env.update(
         {
+            "FRONTEND_PORT": os.getenv("E2E_FRONTEND_PORT", "18000"),
             "MENU_PORT": os.getenv("E2E_MENU_PORT", "18001"),
             "ORDERS_PORT": os.getenv("E2E_ORDERS_PORT", "18002"),
             "LOYALTY_PORT": os.getenv("E2E_LOYALTY_PORT", "18003"),
@@ -33,6 +34,7 @@ def main() -> int:
     test_env = compose_env.copy()
     test_env.update(
         {
+            "E2E_FRONTEND_URL": f"http://localhost:{compose_env['FRONTEND_PORT']}",
             "E2E_MENU_URL": f"http://localhost:{compose_env['MENU_PORT']}",
             "E2E_ORDERS_URL": f"http://localhost:{compose_env['ORDERS_PORT']}",
             "E2E_LOYALTY_URL": f"http://localhost:{compose_env['LOYALTY_PORT']}",

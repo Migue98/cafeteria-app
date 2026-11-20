@@ -5,9 +5,9 @@ consultar un menú, armar un carrito, confirmar pedidos y acumular puntos de
 lealtad. La prioridad del proyecto es demostrar un ciclo completo de desarrollo,
 construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
-> **Estado actual:** los tres backends (`svc-menu`, `svc-pedidos` y
-> `svc-lealtad`) cuentan con MVP ejecutable, pruebas y entorno contenedorizado
-> con PostgreSQL. `frontend` conserva por ahora su estructura inicial.
+> **Estado actual:** el frontend y los tres backends (`svc-menu`, `svc-pedidos`
+> y `svc-lealtad`) cuentan con MVP ejecutable, pruebas y entorno
+> contenedorizado con PostgreSQL.
 
 ## Repositorios
 
@@ -47,7 +47,7 @@ flowchart LR
 
 | Componente | Responsabilidad |
 |---|---|
-| `frontend` | Menú, carrito, confirmación del pedido y consulta de puntos. |
+| `frontend` | Menú Jinja/HTMX, carrito, confirmación del pedido, historial y puntos. |
 | `svc-menu` | Productos, precios y disponibilidad. |
 | `svc-pedidos` | Creación, persistencia y consulta de pedidos. |
 | `svc-lealtad` | Movimientos y saldo de puntos por cliente. |
@@ -95,7 +95,8 @@ python scripts/smoke_compose.py
 podman compose down
 ```
 
-El Compose raíz levanta PostgreSQL y los tres backends. Consulta la
+El Compose raíz levanta el frontend, PostgreSQL y los tres backends. Abre
+`http://localhost:8000` para usar la aplicación. Consulta la
 [guía de integración local](docs/local-integration.md) para ver puertos,
 configuración, prueba completa y limpieza del volumen.
 
@@ -156,5 +157,5 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Comenzar el frontend con el flujo menú → carrito → pedido → puntos, consumiendo
-el entorno integrado de los tres backends.
+Crear los manifiestos de Kubernetes y los overlays GitOps para desplegar los
+cuatro microservicios y PostgreSQL con probes, recursos y persistencia.

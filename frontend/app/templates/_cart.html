@@ -1,0 +1,54 @@
+<aside class="cart-panel" id="cart-panel" aria-labelledby="cart-title">
+  <div class="cart-heading">
+    <div>
+      <p class="eyebrow eyebrow-dark">Tu selección</p>
+      <h2 id="cart-title">Carrito</h2>
+    </div>
+    <span class="cart-count" aria-label="{{ cart_count }} productos">{{ cart_count }}</span>
+  </div>
+
+  {% if cart_rows %}
+  <div class="cart-items">
+    {% for row in cart_rows %}
+    <article class="cart-item">
+      <div>
+        <h3>{{ row.name }}</h3>
+        <p>{{ row.line_total_cents|money }}</p>
+      </div>
+      <div class="quantity-controls" aria-label="Cantidad de {{ row.name }}">
+        <form method="post" action="/cart/items/{{ row.id }}/decrement"
+              hx-post="/cart/items/{{ row.id }}/decrement"
+              hx-target="#cart-panel" hx-swap="outerHTML">
+          <button type="submit" aria-label="Quitar uno de {{ row.name }}">−</button>
+        </form>
+        <strong>{{ row.quantity }}</strong>
+        <form method="post" action="/cart/items/{{ row.id }}"
+              hx-post="/cart/items/{{ row.id }}"
+              hx-target="#cart-panel" hx-swap="outerHTML">
+          <button type="submit" aria-label="Agregar otro {{ row.name }}">+</button>
+        </form>
+      </div>
+      <form class="remove-form" method="post" action="/cart/items/{{ row.id }}/remove"
+            hx-post="/cart/items/{{ row.id }}/remove"
+            hx-target="#cart-panel" hx-swap="outerHTML">
+        <button type="submit">Eliminar</button>
+      </form>
+    </article>
+    {% endfor %}
+  </div>
+  <div class="cart-total">
+    <span>Total</span>
+    <strong>{{ cart_total_cents|money }}</strong>
+  </div>
+  <p class="loyalty-hint">Ganarás aproximadamente {{ cart_total_cents // 1000 }} puntos con este pedido.</p>
+  <form method="post" action="/checkout">
+    <button class="button button-checkout" type="submit">Confirmar pedido</button>
+  </form>
+  {% else %}
+  <div class="cart-empty">
+    <span aria-hidden="true">☕</span>
+    <strong>Tu carrito está esperando</strong>
+    <p>Agrega algo rico del menú para comenzar.</p>
+  </div>
+  {% endif %}
+</aside>

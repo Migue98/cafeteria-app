@@ -11,6 +11,7 @@ from urllib.request import Request, urlopen
 from uuid import uuid4
 
 SERVICES = {
+    "frontend": "http://localhost:8000",
     "menu": "http://localhost:8001",
     "orders": "http://localhost:8002",
     "loyalty": "http://localhost:8003",
@@ -68,6 +69,10 @@ def wait_until_healthy(timeout_seconds: int = 60) -> None:
 def main() -> None:
     wait_until_healthy()
 
+    home = request_text(f"{SERVICES['frontend']}/")
+    assert "Café americano" in home, "El frontend no mostró el menú"
+    assert "Carrito" in home, "El frontend no mostró el carrito"
+
     menu_status, menu = request_json(
         "GET",
         f"{SERVICES['menu']}/api/v1/products?{urlencode({'available': 'true', 'limit': 20})}",
@@ -124,6 +129,7 @@ def main() -> None:
     assert balance_status == 200 and balance["balance"] == 10, balance
 
     expected_metrics = {
+        "frontend": "http_requests_total",
         "menu": "http_requests_total",
         "orders": "cafe_orders_total",
         "loyalty": "cafe_loyalty_points_total",

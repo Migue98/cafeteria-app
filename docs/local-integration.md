@@ -1,14 +1,14 @@
-# Integración local de los backends
+# Integración local de la aplicación
 
-El [`compose.yaml`](../compose.yaml) de la raíz levanta una sola instancia de
-PostgreSQL y los tres backends como imágenes independientes:
+El [`compose.yaml`](../compose.yaml) de la raíz levanta el frontend, una sola
+instancia de PostgreSQL y los tres backends como imágenes independientes:
 
 ```text
-svc-pedidos ──→ svc-menu ─────┐
-      │                       │
-      └──────→ svc-lealtad ───┼──→ PostgreSQL
-                              │
-svc-pedidos ──────────────────┘
+ navegador ──→ frontend ──┬──→ svc-menu ─────────┐
+                          ├──→ svc-pedidos ──────┼──→ PostgreSQL
+                          │         ├→ svc-menu  │
+                          │         └→ svc-lealtad
+                          └──→ svc-lealtad ──────┘
 ```
 
 La base compartida simplifica el desarrollo local, pero cada servicio conserva
@@ -34,6 +34,7 @@ las dependencias. Las APIs quedan en:
 
 | Servicio | URL | OpenAPI |
 |---|---|---|
+| Frontend | `http://localhost:8000` | `http://localhost:8000/docs` |
 | Menú | `http://localhost:8001` | `http://localhost:8001/docs` |
 | Pedidos | `http://localhost:8002` | `http://localhost:8002/docs` |
 | Lealtad | `http://localhost:8003` | `http://localhost:8003/docs` |
@@ -48,13 +49,14 @@ python scripts/smoke_compose.py
 
 La prueba verifica:
 
-1. Salud de los tres servicios y PostgreSQL.
-2. Catálogo con al menos 20 productos.
-3. Creación de un pedido usando precios de `svc-menu`.
-4. Acreditación de puntos mediante `svc-lealtad`.
-5. Replay idempotente sin duplicar el pedido.
-6. Consulta del pedido, listado del cliente y saldo.
-7. Métricas Prometheus de los tres servicios.
+1. Salud de los cuatro servicios y PostgreSQL.
+2. Renderizado del menú y carrito en el frontend.
+3. Catálogo con al menos 20 productos.
+4. Creación de un pedido usando precios de `svc-menu`.
+5. Acreditación de puntos mediante `svc-lealtad`.
+6. Replay idempotente sin duplicar el pedido.
+7. Consulta del pedido, listado del cliente y saldo.
+8. Métricas Prometheus de los cuatro servicios.
 
 El smoke test es una comprobación rápida sobre el entorno ya levantado. La
 suite E2E automatizada crea su propio proyecto Compose y volumen aislados:
