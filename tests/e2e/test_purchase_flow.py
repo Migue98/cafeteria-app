@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 from uuid import uuid4
@@ -109,6 +110,97 @@ def test_browser_completes_purchase_and_opens_history(
     assert history.status == 200
     assert "Café americano" in history.body
     assert "Croissant" in history.body
+
+
+def test_checkout_trace_links_all_four_services(
+    api: ApiClient, browser: BrowserSession, compose_command: list[str]
+) -> None:
+    browser.request("POST", f"{api.frontend_url}/cart/items/1")
+    request_id = str(uuid4())
+    trace_id = uuid4().hex
+    parent_span = uuid4().hex[:16]
+    receipt = browser.request(
+        "POST",
+        f"{api.frontend_url}/checkout",
+        headers={
+            "X-Request-ID": request_id,
+            "traceparent": f"00-{trace_id}-{parent_span}-01",
+        },
+    )
+    assert receipt.status == 200
+    assert receipt.headers["x-request-id"] == request_id
+    frontend_span = receipt.headers["traceparent"].split("-")[2]
+
+    events = []
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        logs = subprocess.run(
+            [
+                *compose_command,
+                "logs",
+                "--no-color",
+                "--no-log-prefix",
+                "frontend",
+                "svc-menu",
+                "svc-pedidos",
+                "svc-lealtad",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        events = []
+        for line in logs.stdout.splitlines():
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if (
+                event.get("trace_id") == trace_id
+                and event.get("message") == "request_completed"
+            ):
+                events.append(event)
+        if {event["service"] for event in events} == {
+            "frontend",
+            "svc-menu",
+            "svc-pedidos",
+            "svc-lealtad",
+        }:
+            break
+        time.sleep(0.2)
+
+    by_service = {
+        service: [event for event in events if event["service"] == service]
+        for service in ("frontend", "svc-menu", "svc-pedidos", "svc-lealtad")
+    }
+    assert all(by_service.values()), events
+    frontend_event = by_service["frontend"][0]
+    order_event = next(
+        event
+        for event in by_service["svc-pedidos"]
+        if event["route"] == "/api/v1/orders"
+    )
+    assert frontend_event["span_id"] == frontend_span
+    assert frontend_event["parent_span_id"] == parent_span
+    assert order_event["parent_span_id"] == frontend_span
+    assert any(
+        event["parent_span_id"] == order_event["span_id"]
+        for event in by_service["svc-menu"]
+    )
+    award = next(
+        event
+        for event in by_service["svc-lealtad"]
+        if event["route"] == "/api/v1/points/earn"
+    )
+    assert award["parent_span_id"] == order_event["span_id"]
+    assert len({event["span_id"] for event in events}) == len(events)
+    for event in events:
+        assert event["request_id"] == request_id
+        assert event["timestamp"]
+        assert event["level"] == "INFO"
+        assert event["duration_ms"] >= 0
+        assert event["status_code"] < 400
 
 
 def test_order_idempotency_does_not_duplicate_order_or_points(api: ApiClient) -> None:

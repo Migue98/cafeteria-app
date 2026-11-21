@@ -61,6 +61,8 @@ Los detalles están en la [arquitectura](docs/architecture.md) y la
 - OpenAPI 3.1 es la fuente de verdad de los tres backends.
 - Las rutas de negocio usan `/api/v1`.
 - Todos los servicios exponen `GET /health` y `GET /metrics`.
+- Los cuatro servicios emiten logs JSON y propagan el contexto de la petición;
+  consulta la [guía de logs y correlación](docs/application-observability.md).
 - Pedidos recupera automáticamente las acreditaciones pendientes cuando
   lealtad vuelve a estar disponible.
 - Los importes se expresan en centavos enteros y moneda MXN.

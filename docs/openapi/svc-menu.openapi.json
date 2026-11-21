@@ -19,10 +19,11 @@
         "tags": ["operación"],
         "operationId": "menuHealth",
         "summary": "Comprueba el servicio y PostgreSQL",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Servicio disponible",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
           },
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
@@ -34,9 +35,11 @@
         "tags": ["operación"],
         "operationId": "menuMetrics",
         "summary": "Expone métricas para Prometheus",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Métricas en formato Prometheus",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
           }
         }
@@ -48,6 +51,7 @@
         "operationId": "listProducts",
         "summary": "Lista productos del menú",
         "parameters": [
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"},
           {
             "name": "category",
@@ -67,7 +71,7 @@
         "responses": {
           "200": {
             "description": "Página de productos ordenada por id",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProductList"}}}
           },
           "422": {"$ref": "#/components/responses/ValidationError"},
@@ -82,12 +86,13 @@
         "summary": "Obtiene un producto",
         "parameters": [
           {"$ref": "#/components/parameters/ProductId"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "responses": {
           "200": {
             "description": "Producto encontrado",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Product"}}}
           },
           "404": {"$ref": "#/components/responses/NotFound"},
@@ -99,6 +104,13 @@
   },
   "components": {
     "parameters": {
+      "Traceparent": {
+        "name": "traceparent",
+        "in": "header",
+        "required": false,
+        "description": "Contexto W3C versión 00; si falta o es inválido se inicia una traza nueva.",
+        "schema": {"type": "string"}
+      },
       "ProductId": {
         "name": "product_id",
         "in": "path",
@@ -123,6 +135,10 @@
       }
     },
     "headers": {
+      "Traceparent": {
+        "description": "Traza y span del servicio que respondió. Cada salto conserva trace_id y genera span_id.",
+        "schema": {"type": "string", "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"}
+      },
       "RequestId": {
         "description": "Identificador de correlación recibido o generado por el servicio.",
         "schema": {"type": "string", "format": "uuid"}
@@ -131,14 +147,17 @@
     "responses": {
       "NotFound": {
         "description": "Producto inexistente",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ValidationError": {
         "description": "Parámetros inválidos",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ServiceUnavailable": {
         "description": "PostgreSQL u otra dependencia crítica no está disponible",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       }
     },

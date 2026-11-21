@@ -19,10 +19,11 @@
         "tags": ["operación"],
         "operationId": "loyaltyHealth",
         "summary": "Comprueba el servicio y PostgreSQL",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Servicio disponible",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
           },
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
@@ -34,9 +35,11 @@
         "tags": ["operación"],
         "operationId": "loyaltyMetrics",
         "summary": "Expone métricas para Prometheus",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Métricas en formato Prometheus",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
           }
         }
@@ -50,6 +53,7 @@
         "description": "Otorga un punto por cada 1000 centavos ($10 MXN) completos. order_id e Idempotency-Key evitan una acreditación duplicada.",
         "parameters": [
           {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "requestBody": {
@@ -59,12 +63,12 @@
         "responses": {
           "201": {
             "description": "Puntos acreditados por primera vez",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointAward"}}}
           },
           "200": {
             "description": "Replay idempotente; devuelve la acreditación original con replayed=true",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointAward"}}}
           },
           "409": {"$ref": "#/components/responses/Conflict"},
@@ -81,12 +85,13 @@
         "description": "Un cliente sin movimientos obtiene saldo cero; no se considera error 404.",
         "parameters": [
           {"$ref": "#/components/parameters/CustomerId"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "responses": {
           "200": {
             "description": "Saldo actual",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PointsBalance"}}}
           },
           "422": {"$ref": "#/components/responses/ValidationError"},
@@ -97,6 +102,13 @@
   },
   "components": {
     "parameters": {
+      "Traceparent": {
+        "name": "traceparent",
+        "in": "header",
+        "required": false,
+        "description": "Contexto W3C versión 00; si falta o es inválido se inicia una traza nueva.",
+        "schema": {"type": "string"}
+      },
       "CustomerId": {
         "name": "customer_id",
         "in": "path",
@@ -118,6 +130,10 @@
       }
     },
     "headers": {
+      "Traceparent": {
+        "description": "Traza y span del servicio que respondió. Cada salto conserva trace_id y genera span_id.",
+        "schema": {"type": "string", "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"}
+      },
       "RequestId": {
         "description": "Identificador de correlación recibido o generado por el servicio.",
         "schema": {"type": "string", "format": "uuid"}
@@ -126,14 +142,17 @@
     "responses": {
       "Conflict": {
         "description": "La clave fue reutilizada con otro cuerpo o el pedido ya se asoció a datos distintos",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ValidationError": {
         "description": "Solicitud inválida",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ServiceUnavailable": {
         "description": "PostgreSQL no está disponible",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       }
     },

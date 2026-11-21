@@ -10,6 +10,7 @@
 | [Validación de entradas inmutables](immutable-input-validation.md) | Evidencia de imágenes, runtime y referencias externas fijadas. |
 | [Integración local](local-integration.md) | Compose raíz y prueba completa de los backends. |
 | [Reintento automático de lealtad](automatic-loyalty-retry.md) | Recuperación, idempotencia, configuración y métricas. |
+| [Logs y correlación](application-observability.md) | Formato JSON común, propagación de contexto y guía para seguir una petición. |
 | [Pruebas E2E](../tests/README.md) | Ejecución aislada, alcance y opciones de la suite integral. |
 | [Contratos OpenAPI](openapi/README.md) | APIs, convenciones y ejemplos ejecutables. |
 | [ADR-001](decisions/ADR-001-stack.md) | Elección del stack. |
@@ -17,5 +18,5 @@
 | [ADR-003](decisions/ADR-003-reproducible-dependencies.md) | Estrategia de versiones directas y locks reproducibles. |
 | [ADR-004](decisions/ADR-004-immutable-build-inputs.md) | Imágenes, herramientas y Actions fijadas por digest o SHA. |
 
-La infraestructura desplegable y la observabilidad se documentan en
+La infraestructura desplegable y la plataforma de observabilidad se documentan en
 [`cafeteria-gitops`](https://github.com/Migue98/cafeteria-gitops).

@@ -46,7 +46,9 @@ class FakeGateway:
         self.balance = 0
         self.closed = False
 
-    def list_products(self, *, request_id: str) -> list[dict[str, Any]]:
+    def list_products(
+        self, *, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]:
         UUID(request_id)
         return self.products
 
@@ -57,6 +59,7 @@ class FakeGateway:
         items: list[dict[str, int]],
         idempotency_key: str,
         request_id: str,
+        traceparent: str,
     ) -> dict[str, Any]:
         UUID(customer_id)
         UUID(request_id)
@@ -101,13 +104,17 @@ class FakeGateway:
         self.orders.insert(0, order)
         return order
 
-    def list_orders(self, *, customer_id: str, request_id: str) -> list[dict[str, Any]]:
+    def list_orders(
+        self, *, customer_id: str, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]:
         return [order for order in self.orders if order["customer_id"] == customer_id]
 
-    def get_balance(self, *, customer_id: str, request_id: str) -> dict[str, Any]:
+    def get_balance(
+        self, *, customer_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]:
         return {"customer_id": customer_id, "balance": self.balance, "updated_at": None}
 
-    def health(self, *, request_id: str) -> dict[str, str]:
+    def health(self, *, request_id: str, traceparent: str) -> dict[str, str]:
         return {"menu": "healthy", "orders": "healthy", "loyalty": "healthy"}
 
     def close(self) -> None:
@@ -115,7 +122,9 @@ class FakeGateway:
 
 
 class FailingGateway(FakeGateway):
-    def list_products(self, *, request_id: str) -> list[dict[str, Any]]:
+    def list_products(
+        self, *, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]:
         raise BackendError("El menú no está disponible.")
 
 

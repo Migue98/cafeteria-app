@@ -2,12 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import re
-from time import perf_counter
 from typing import Annotated
-from uuid import UUID, uuid4
 
 from fastapi import Depends, FastAPI, Path, Query, Request
 from fastapi.encoders import jsonable_encoder
@@ -24,14 +20,14 @@ from .models import (
     Product,
     ProductList,
 )
+from .observability import get_logger, install_observability, log_event
 from .repository import (
     PostgresProductRepository,
     ProductRepository,
     RepositoryUnavailable,
 )
 
-LOGGER = logging.getLogger("svc-menu")
-TRACEPARENT_PATTERN = re.compile(r"^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$")
+LOGGER = get_logger("svc-menu")
 
 HTTP_REQUESTS = Counter(
     "http_requests_total",
@@ -43,12 +39,6 @@ HTTP_DURATION = Histogram(
     "Duración de las peticiones HTTP.",
     ["service", "method", "route"],
 )
-
-
-def _trace_id(request: Request) -> str:
-    traceparent = request.headers.get("traceparent", "").lower()
-    match = TRACEPARENT_PATTERN.fullmatch(traceparent)
-    return match.group(1) if match else uuid4().hex
 
 
 def _problem_response(
@@ -67,7 +57,7 @@ def _problem_response(
         status=status,
         detail=detail,
         code=code,
-        trace_id=getattr(request.state, "trace_id", _trace_id(request)),
+        trace_id=request.state.trace_id,
         instance=request.url.path,
         errors=errors,
     )
@@ -95,61 +85,23 @@ def create_app(repository: ProductRepository | None = None) -> FastAPI:
     application.state.repository = repository or PostgresProductRepository(settings.database_url)
     application.state.app_version = settings.app_version
 
-    @application.middleware("http")
-    async def request_context(request: Request, call_next):
-        started = perf_counter()
-        supplied_request_id = request.headers.get("X-Request-ID")
-        try:
-            request_id = UUID(supplied_request_id) if supplied_request_id else uuid4()
-        except ValueError:
-            request.state.trace_id = _trace_id(request)
-            response = _problem_response(
-                request,
-                status=422,
-                title="Encabezado inválido",
-                detail="X-Request-ID debe ser un UUID válido.",
-                code="VALIDATION_ERROR",
-                slug="validation-error",
-            )
-            response.headers["X-Request-ID"] = str(uuid4())
-            return response
-
-        request.state.request_id = str(request_id)
-        request.state.trace_id = _trace_id(request)
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request.state.request_id
-
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", "unmatched")
-        duration = perf_counter() - started
-        HTTP_REQUESTS.labels(
-            service="svc-menu",
-            method=request.method,
-            route=route_path,
-            status_code=str(response.status_code),
-        ).inc()
-        HTTP_DURATION.labels(
-            service="svc-menu",
-            method=request.method,
-            route=route_path,
-        ).observe(duration)
-        LOGGER.info(
-            json.dumps(
-                {
-                    "level": "INFO",
-                    "service": "svc-menu",
-                    "message": "request_completed",
-                    "method": request.method,
-                    "path": request.url.path,
-                    "route": route_path,
-                    "status_code": response.status_code,
-                    "duration_ms": round(duration * 1000, 3),
-                    "request_id": request.state.request_id,
-                    "trace_id": request.state.trace_id,
-                }
-            )
+    def invalid_request_id(request: Request) -> JSONResponse:
+        return _problem_response(
+            request,
+            status=422,
+            title="Encabezado inválido",
+            detail="X-Request-ID debe ser un UUID válido.",
+            code="VALIDATION_ERROR",
+            slug="validation-error",
         )
-        return response
+
+    install_observability(
+        application,
+        logger=LOGGER,
+        requests=HTTP_REQUESTS,
+        duration=HTTP_DURATION,
+        invalid_response=invalid_request_id,
+    )
 
     @application.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
@@ -165,17 +117,13 @@ def create_app(repository: ProductRepository | None = None) -> FastAPI:
 
     @application.exception_handler(RepositoryUnavailable)
     async def repository_error_handler(request: Request, exc: RepositoryUnavailable):
-        LOGGER.warning(
-            json.dumps(
-                {
-                    "level": "WARNING",
-                    "service": "svc-menu",
-                    "message": "repository_unavailable",
-                    "detail": str(exc),
-                    "request_id": getattr(request.state, "request_id", None),
-                    "trace_id": getattr(request.state, "trace_id", None),
-                }
-            )
+        log_event(
+            LOGGER,
+            "repository_unavailable",
+            level=logging.WARNING,
+            context=request.state.trace_context,
+            request_id=request.state.request_id,
+            detail=str(exc),
         )
         return _problem_response(
             request,

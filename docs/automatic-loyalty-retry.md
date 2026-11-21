@@ -49,8 +49,9 @@ el intervalo a dos segundos únicamente dentro de su proyecto Compose aislado.
 - `cafe_loyalty_retry_attempts_total{outcome="loyalty_unavailable"}`: dependencia caída.
 - `cafe_loyalty_retry_attempts_total{outcome="repository_unavailable"}`: fallo al actualizar PostgreSQL.
 
-Cada intento escribe un evento con `order_id`, `request_id` y `trace_id`. La
-normalización global de logs y trazas se abordará en el siguiente bloque.
+Cada intento escribe un evento con `order_id`, `request_id`, `trace_id` y
+`span_id`, y propaga el contexto a lealtad. Se utiliza el
+[formato común de logs](application-observability.md).
 
 ## Validación
 

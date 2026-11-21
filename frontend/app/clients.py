@@ -19,7 +19,9 @@ class BackendError(RuntimeError):
 
 
 class BackendGateway(Protocol):
-    def list_products(self, *, request_id: str) -> list[dict[str, Any]]: ...
+    def list_products(
+        self, *, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]: ...
 
     def create_order(
         self,
@@ -28,15 +30,18 @@ class BackendGateway(Protocol):
         items: list[dict[str, int]],
         idempotency_key: str,
         request_id: str,
+        traceparent: str,
     ) -> dict[str, Any]: ...
 
     def list_orders(
-        self, *, customer_id: str, request_id: str
+        self, *, customer_id: str, request_id: str, traceparent: str
     ) -> list[dict[str, Any]]: ...
 
-    def get_balance(self, *, customer_id: str, request_id: str) -> dict[str, Any]: ...
+    def get_balance(
+        self, *, customer_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]: ...
 
-    def health(self, *, request_id: str) -> dict[str, str]: ...
+    def health(self, *, request_id: str, traceparent: str) -> dict[str, str]: ...
 
     def close(self) -> None: ...
 
@@ -52,10 +57,15 @@ class HttpBackendGateway:
         url: str,
         *,
         request_id: str,
+        traceparent: str,
         headers: dict[str, str] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        request_headers = {"X-Request-ID": request_id, **(headers or {})}
+        request_headers = {
+            "X-Request-ID": request_id,
+            "traceparent": traceparent,
+            **(headers or {}),
+        }
         try:
             response = self._client.request(
                 method, url, headers=request_headers, follow_redirects=False, **kwargs
@@ -80,11 +90,14 @@ class HttpBackendGateway:
             )
         return payload
 
-    def list_products(self, *, request_id: str) -> list[dict[str, Any]]:
+    def list_products(
+        self, *, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]:
         payload = self._request(
             "GET",
             f"{self._settings.menu_url}/api/v1/products",
             request_id=request_id,
+            traceparent=traceparent,
             params={"available": "true", "limit": 100},
         )
         return payload["items"]
@@ -96,32 +109,40 @@ class HttpBackendGateway:
         items: list[dict[str, int]],
         idempotency_key: str,
         request_id: str,
+        traceparent: str,
     ) -> dict[str, Any]:
         return self._request(
             "POST",
             f"{self._settings.orders_url}/api/v1/orders",
             request_id=request_id,
+            traceparent=traceparent,
             headers={"Idempotency-Key": idempotency_key},
             json={"customer_id": customer_id, "items": items},
         )
 
-    def list_orders(self, *, customer_id: str, request_id: str) -> list[dict[str, Any]]:
+    def list_orders(
+        self, *, customer_id: str, request_id: str, traceparent: str
+    ) -> list[dict[str, Any]]:
         payload = self._request(
             "GET",
             f"{self._settings.orders_url}/api/v1/orders",
             request_id=request_id,
+            traceparent=traceparent,
             params={"customer_id": customer_id, "limit": 100},
         )
         return payload["items"]
 
-    def get_balance(self, *, customer_id: str, request_id: str) -> dict[str, Any]:
+    def get_balance(
+        self, *, customer_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]:
         return self._request(
             "GET",
             f"{self._settings.loyalty_url}/api/v1/customers/{customer_id}/points",
             request_id=request_id,
+            traceparent=traceparent,
         )
 
-    def health(self, *, request_id: str) -> dict[str, str]:
+    def health(self, *, request_id: str, traceparent: str) -> dict[str, str]:
         dependencies: dict[str, str] = {}
         urls = {
             "menu": self._settings.menu_url,
@@ -130,7 +151,12 @@ class HttpBackendGateway:
         }
         for name, url in urls.items():
             try:
-                payload = self._request("GET", f"{url}/health", request_id=request_id)
+                payload = self._request(
+                    "GET",
+                    f"{url}/health",
+                    request_id=request_id,
+                    traceparent=traceparent,
+                )
                 dependencies[name] = payload["status"]
             except BackendError:
                 dependencies[name] = "down"

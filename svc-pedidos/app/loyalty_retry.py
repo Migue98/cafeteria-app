@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from traceback import format_exc
 from uuid import uuid4
 
 from prometheus_client import Counter, Gauge
 
 from .clients import LoyaltyClient, LoyaltyUnavailable
+from .observability import TraceContext, get_logger, log_event
 from .repository import OrderRepository, RepositoryUnavailable
 
-LOGGER = logging.getLogger("svc-pedidos.loyalty-retry")
+LOGGER = get_logger("svc-pedidos.loyalty-retry")
 
 LOYALTY_PENDING = Gauge(
     "cafe_loyalty_pending_orders",
@@ -35,21 +35,6 @@ class LoyaltyRetryResult:
     failed: int
 
 
-def _log(level: int, message: str, **fields: object) -> None:
-    LOGGER.log(
-        level,
-        json.dumps(
-            {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "level": logging.getLevelName(level),
-                "service": "svc-pedidos",
-                "message": message,
-                **fields,
-            }
-        ),
-    )
-
-
 def retry_pending_loyalty(
     repository: OrderRepository,
     loyalty: LoyaltyClient,
@@ -63,47 +48,49 @@ def retry_pending_loyalty(
 
     for order in orders:
         request_id = str(uuid4())
-        trace_id = uuid4().hex
-        traceparent = f"00-{trace_id}-{uuid4().hex[:16]}-01"
+        context = TraceContext.from_header()
         try:
             points = loyalty.award(
                 order,
                 request_id=request_id,
-                traceparent=traceparent,
+                traceparent=context.traceparent,
             )
             repository.mark_loyalty_awarded(order.id, points)
         except LoyaltyUnavailable as exc:
             failed += 1
             LOYALTY_RETRIES.labels(outcome="loyalty_unavailable").inc()
-            _log(
-                logging.WARNING,
+            log_event(
+                LOGGER,
                 "loyalty_retry_failed",
+                level=logging.WARNING,
                 order_id=str(order.id),
                 request_id=request_id,
-                trace_id=trace_id,
+                context=context,
                 reason=str(exc),
             )
         except RepositoryUnavailable as exc:
             failed += 1
             LOYALTY_RETRIES.labels(outcome="repository_unavailable").inc()
-            _log(
-                logging.ERROR,
+            log_event(
+                LOGGER,
                 "loyalty_retry_failed",
+                level=logging.ERROR,
                 order_id=str(order.id),
                 request_id=request_id,
-                trace_id=trace_id,
+                context=context,
                 reason=str(exc),
             )
         else:
             awarded += 1
             LOYALTY_RETRIES.labels(outcome="awarded").inc()
-            _log(
-                logging.INFO,
+            log_event(
+                LOGGER,
                 "loyalty_retry_awarded",
+                level=logging.INFO,
                 order_id=str(order.id),
                 points_earned=points,
                 request_id=request_id,
-                trace_id=trace_id,
+                context=context,
             )
 
     LOYALTY_PENDING.set(max(pending_total - awarded, 0))
@@ -131,21 +118,28 @@ async def loyalty_retry_loop(
                 batch_size=batch_size,
             )
             if result.attempted:
-                _log(
-                    logging.INFO,
+                log_event(
+                    LOGGER,
                     "loyalty_retry_batch_completed",
+                    level=logging.INFO,
                     pending_total=result.pending_total,
                     attempted=result.attempted,
                     awarded=result.awarded,
                     failed=result.failed,
                 )
         except RepositoryUnavailable as exc:
-            _log(
-                logging.ERROR,
+            log_event(
+                LOGGER,
                 "loyalty_retry_batch_failed",
+                level=logging.ERROR,
                 reason=str(exc),
             )
         except Exception:
-            LOGGER.exception("Fallo inesperado en el reintento automático de lealtad")
+            log_event(
+                LOGGER,
+                "loyalty_retry_batch_failed",
+                level=logging.ERROR,
+                exception=format_exc(),
+            )
 
         await asyncio.sleep(interval_seconds)

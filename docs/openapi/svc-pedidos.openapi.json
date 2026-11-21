@@ -19,10 +19,11 @@
         "tags": ["operación"],
         "operationId": "ordersHealth",
         "summary": "Comprueba el servicio y sus dependencias",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Servicio disponible; puede estar degraded si lealtad está caída",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/HealthResponse"}}}
           },
           "503": {"$ref": "#/components/responses/ServiceUnavailable"}
@@ -34,9 +35,11 @@
         "tags": ["operación"],
         "operationId": "ordersMetrics",
         "summary": "Expone métricas para Prometheus",
+        "parameters": [{"$ref": "#/components/parameters/Traceparent"}],
         "responses": {
           "200": {
             "description": "Métricas en formato Prometheus",
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"text/plain; version=0.0.4": {"schema": {"type": "string"}}}
           }
         }
@@ -50,6 +53,7 @@
         "description": "Consulta nombres, disponibilidad y precios actuales en svc-menu. La falla de lealtad no revierte un pedido ya guardado: loyalty_status queda pending y se recupera mediante reintentos automáticos o el endpoint manual.",
         "parameters": [
           {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "requestBody": {
@@ -59,12 +63,12 @@
         "responses": {
           "201": {
             "description": "Pedido creado por primera vez",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
           },
           "200": {
             "description": "Replay idempotente; devuelve el pedido original con replayed=true",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
           },
           "409": {"$ref": "#/components/responses/Conflict"},
@@ -80,12 +84,13 @@
           {"$ref": "#/components/parameters/CustomerQuery"},
           {"$ref": "#/components/parameters/Limit"},
           {"$ref": "#/components/parameters/Offset"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "responses": {
           "200": {
             "description": "Página de pedidos, del más reciente al más antiguo",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/OrderList"}}}
           },
           "422": {"$ref": "#/components/responses/ValidationError"},
@@ -100,12 +105,13 @@
         "summary": "Obtiene un pedido",
         "parameters": [
           {"$ref": "#/components/parameters/OrderId"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "responses": {
           "200": {
             "description": "Pedido encontrado",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
           },
           "404": {"$ref": "#/components/responses/NotFound"},
@@ -122,12 +128,13 @@
         "description": "La acreditación en svc-lealtad sigue siendo idempotente por order_id. Si ya fue acreditada, sincroniza el resultado sin duplicar puntos.",
         "parameters": [
           {"$ref": "#/components/parameters/OrderId"},
+          {"$ref": "#/components/parameters/Traceparent"},
           {"$ref": "#/components/parameters/RequestId"}
         ],
         "responses": {
           "200": {
             "description": "Estado de lealtad actualizado o ya sincronizado",
-            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}},
+            "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Order"}}}
           },
           "404": {"$ref": "#/components/responses/NotFound"},
@@ -139,6 +146,13 @@
   },
   "components": {
     "parameters": {
+      "Traceparent": {
+        "name": "traceparent",
+        "in": "header",
+        "required": false,
+        "description": "Contexto W3C versión 00; si falta o es inválido se inicia una traza nueva.",
+        "schema": {"type": "string"}
+      },
       "OrderId": {
         "name": "order_id",
         "in": "path",
@@ -176,6 +190,10 @@
       }
     },
     "headers": {
+      "Traceparent": {
+        "description": "Traza y span del servicio que respondió. Cada salto conserva trace_id y genera span_id.",
+        "schema": {"type": "string", "pattern": "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"}
+      },
       "RequestId": {
         "description": "Identificador de correlación recibido o generado por el servicio.",
         "schema": {"type": "string", "format": "uuid"}
@@ -184,22 +202,27 @@
     "responses": {
       "NotFound": {
         "description": "Pedido inexistente",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "Conflict": {
         "description": "Producto no disponible o clave de idempotencia reutilizada con otro cuerpo",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ValidationError": {
         "description": "Solicitud inválida, incluyendo productos repetidos",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "ServiceUnavailable": {
         "description": "PostgreSQL o svc-menu no está disponible; no se crea el pedido",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       },
       "LoyaltyUnavailable": {
         "description": "svc-lealtad continúa sin estar disponible; el pedido permanece confirmado y pendiente",
+        "headers": {"X-Request-ID": {"$ref": "#/components/headers/RequestId"}, "traceparent": {"$ref": "#/components/headers/Traceparent"}},
         "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}}
       }
     },

@@ -5,6 +5,8 @@ La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro
 ## Alcance
 
 - salud y correlación mediante `X-Request-ID`;
+- correlación de una compra en los logs de los cuatro servicios, con `trace_id`,
+  spans propios y enlace al span padre;
 - catálogo, precios y disponibilidad reales;
 - compra completa `menú → pedido → puntos`;
 - compra desde la interfaz HTML y consulta posterior del historial;
@@ -39,3 +41,16 @@ Para usar Podman:
 $env:CONTAINER_ENGINE = "podman"
 python scripts/run_e2e.py
 ```
+
+## Contrato común de observabilidad
+
+Los cuatro workflows ejecutan `tests/observability` con el entorno de cada
+servicio. Desde el directorio del servicio, con sus dependencias instaladas:
+
+```powershell
+python -m pytest tests ../tests/observability -p no:cacheprovider
+```
+
+Esta suite comprueba trazas, logs de errores, aislamiento concurrente y paridad
+de la implementación común. Consulta la
+[guía de logs y correlación](../docs/application-observability.md).

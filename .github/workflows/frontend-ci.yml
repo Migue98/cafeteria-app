@@ -3,11 +3,13 @@ name: frontend CI
 on:
   pull_request:
     paths:
+      - "tests/observability/**"
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
   push:
     branches: [main]
     paths:
+      - "tests/observability/**"
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
 
@@ -39,11 +41,11 @@ jobs:
 
       - name: Lint and check formatting
         run: |
-          ruff check app tests
-          ruff format --check app tests
+          ruff check app tests ../tests/observability
+          ruff format --check app tests ../tests/observability
 
       - name: Run tests
-        run: python -m pytest -p no:cacheprovider
+        run: python -m pytest tests ../tests/observability -p no:cacheprovider
 
       - name: Build container image
         run: docker build -f Containerfile -t cafeteria-frontend:${{ github.sha }} .

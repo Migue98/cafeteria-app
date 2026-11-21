@@ -29,7 +29,14 @@ El cliente puede enviarlo. Si falta, el primer servicio genera un UUID. Todos lo
 
 ### `traceparent`
 
-Se propaga según W3C Trace Context mediante OpenTelemetry. No se inventa manualmente si el SDK ya lo gestiona.
+Se admite el formato W3C Trace Context de versión `00`. Cada servicio conserva
+el `trace_id` y los flags, genera su propio `span_id` y registra el span recibido
+como `parent_span_id`. Si el encabezado falta o es inválido, se inicia una traza
+nueva. No se aceptan identificadores de solo ceros. El contexto del servicio se
+devuelve en la respuesta y se propaga a sus llamadas HTTP.
+
+Actualmente la correlación se implementa en la aplicación, sin SDK ni exportador
+de OpenTelemetry. Los detalles están en [Logs y correlación](../application-observability.md).
 
 ### `Idempotency-Key`
 

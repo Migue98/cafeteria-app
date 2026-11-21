@@ -102,7 +102,9 @@ class ApiClient:
             if pending:
                 time.sleep(1)
         if pending:
-            pytest.fail(f"Servicios sin salud: {sorted(pending)}; último error: {last_errors}")
+            pytest.fail(
+                f"Servicios sin salud: {sorted(pending)}; último error: {last_errors}"
+            )
 
 
 class BrowserSession:
@@ -111,9 +113,11 @@ class BrowserSession:
     def __init__(self) -> None:
         self._opener = build_opener(HTTPCookieProcessor(CookieJar()))
 
-    def request(self, method: str, url: str) -> HttpResult:
+    def request(
+        self, method: str, url: str, *, headers: dict[str, str] | None = None
+    ) -> HttpResult:
         data = b"" if method != "GET" else None
-        request = Request(url, data=data, method=method)
+        request = Request(url, data=data, method=method, headers=headers or {})
         with self._opener.open(request, timeout=10) as response:
             return HttpResult(
                 response.status,

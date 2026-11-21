@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from time import perf_counter
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -22,8 +20,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from .clients import BackendError, BackendGateway, HttpBackendGateway
 from .config import Settings, load_settings
+from .observability import get_logger, install_observability
 
-LOGGER = logging.getLogger("frontend")
+LOGGER = get_logger("frontend")
 BASE_DIR = Path(__file__).resolve().parent
 
 HTTP_REQUESTS = Counter(
@@ -151,59 +150,25 @@ def create_app(
     templates.env.filters["money"] = _money
     templates.env.filters["date_time"] = _date_time
 
-    @application.middleware("http")
-    async def request_context(request: Request, call_next):
-        started = perf_counter()
-        supplied_request_id = request.headers.get("X-Request-ID")
-        try:
-            request_id = (
-                str(UUID(supplied_request_id)) if supplied_request_id else str(uuid4())
-            )
-        except ValueError:
-            request_id = str(uuid4())
-            response = JSONResponse(
-                status_code=422,
-                content={
-                    "title": "Encabezado inválido",
-                    "status": 422,
-                    "detail": "X-Request-ID debe ser un UUID válido.",
-                    "code": "VALIDATION_ERROR",
-                },
-            )
-            response.headers["X-Request-ID"] = request_id
-            return response
-
-        request.state.request_id = request_id
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request_id
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", "unmatched")
-        duration = perf_counter() - started
-        HTTP_REQUESTS.labels(
-            service="frontend",
-            method=request.method,
-            route=route_path,
-            status_code=str(response.status_code),
-        ).inc()
-        HTTP_DURATION.labels(
-            service="frontend", method=request.method, route=route_path
-        ).observe(duration)
-        LOGGER.info(
-            json.dumps(
-                {
-                    "level": "INFO",
-                    "service": "frontend",
-                    "message": "request_completed",
-                    "method": request.method,
-                    "path": request.url.path,
-                    "route": route_path,
-                    "status_code": response.status_code,
-                    "duration_ms": round(duration * 1000, 3),
-                    "request_id": request_id,
-                }
-            )
+    def invalid_request_id(request: Request) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "title": "Encabezado inválido",
+                "status": 422,
+                "detail": "X-Request-ID debe ser un UUID válido.",
+                "code": "VALIDATION_ERROR",
+                "trace_id": request.state.trace_id,
+            },
         )
-        return response
+
+    install_observability(
+        application,
+        logger=LOGGER,
+        requests=HTTP_REQUESTS,
+        duration=HTTP_DURATION,
+        invalid_response=invalid_request_id,
+    )
 
     def menu_context(
         request: Request,
@@ -212,7 +177,9 @@ def create_app(
         checkout_error: str | None = None,
     ) -> dict[str, Any]:
         customer_id = _customer_id(request)
-        products = backend.list_products(request_id=request.state.request_id)
+        products = backend.list_products(
+            request_id=request.state.request_id, traceparent=request.state.traceparent
+        )
         categories = sorted({product["category"] for product in products})
         visible_products = [
             product
@@ -221,7 +188,9 @@ def create_app(
         ]
         try:
             balance = backend.get_balance(
-                customer_id=customer_id, request_id=request.state.request_id
+                customer_id=customer_id,
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
             )["balance"]
             balance_available = True
         except BackendError:
@@ -267,7 +236,9 @@ def create_app(
 
     @application.get("/health", tags=["operación"])
     def health(request: Request) -> JSONResponse:
-        dependencies = backend.health(request_id=request.state.request_id)
+        dependencies = backend.health(
+            request_id=request.state.request_id, traceparent=request.state.traceparent
+        )
         status = (
             "healthy"
             if all(value == "healthy" for value in dependencies.values())
@@ -298,7 +269,10 @@ def create_app(
         product_id: int = PathParameter(ge=1),
     ) -> Response:
         try:
-            products = backend.list_products(request_id=request.state.request_id)
+            products = backend.list_products(
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
+            )
         except BackendError as exc:
             return templates.TemplateResponse(
                 request=request,
@@ -340,7 +314,10 @@ def create_app(
         _save_cart(request, cart)
         if request.headers.get("HX-Request") == "true":
             try:
-                products = backend.list_products(request_id=request.state.request_id)
+                products = backend.list_products(
+                    request_id=request.state.request_id,
+                    traceparent=request.state.traceparent,
+                )
             except BackendError as exc:
                 return HTMLResponse(str(exc), status_code=exc.status_code)
             return templates.TemplateResponse(
@@ -360,7 +337,10 @@ def create_app(
         _save_cart(request, cart)
         if request.headers.get("HX-Request") == "true":
             try:
-                products = backend.list_products(request_id=request.state.request_id)
+                products = backend.list_products(
+                    request_id=request.state.request_id,
+                    traceparent=request.state.traceparent,
+                )
             except BackendError as exc:
                 return HTMLResponse(str(exc), status_code=exc.status_code)
             return templates.TemplateResponse(
@@ -389,6 +369,7 @@ def create_app(
                 ],
                 idempotency_key=_checkout_key(request, cart),
                 request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
             )
         except BackendError as exc:
             return render_home(
@@ -401,7 +382,9 @@ def create_app(
         request.session.pop("checkout_attempt", None)
         try:
             balance = backend.get_balance(
-                customer_id=customer_id, request_id=request.state.request_id
+                customer_id=customer_id,
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
             )["balance"]
         except BackendError:
             balance = None
@@ -416,10 +399,14 @@ def create_app(
         customer_id = _customer_id(request)
         try:
             order_items = backend.list_orders(
-                customer_id=customer_id, request_id=request.state.request_id
+                customer_id=customer_id,
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
             )
             balance = backend.get_balance(
-                customer_id=customer_id, request_id=request.state.request_id
+                customer_id=customer_id,
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
             )["balance"]
         except BackendError as exc:
             return templates.TemplateResponse(

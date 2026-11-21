@@ -5,11 +5,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import logging
-import re
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
-from time import perf_counter
 from typing import Annotated
 from uuid import UUID, uuid4
 
@@ -39,6 +36,7 @@ from .models import (
     OrderList,
     Problem,
 )
+from .observability import get_logger, install_observability
 from .repository import (
     OrderRepository,
     PostgresOrderRepository,
@@ -46,8 +44,7 @@ from .repository import (
     StoredOrder,
 )
 
-LOGGER = logging.getLogger("svc-pedidos")
-TRACEPARENT_PATTERN = re.compile(r"^[0-9a-f]{2}-([0-9a-f]{32})-[0-9a-f]{16}-[0-9a-f]{2}$")
+LOGGER = get_logger("svc-pedidos")
 
 HTTP_REQUESTS = Counter(
     "http_requests_total",
@@ -80,16 +77,6 @@ class IdempotencyConflict(RuntimeError):
     """La misma clave fue reutilizada con una solicitud diferente."""
 
 
-def _trace_context(request: Request) -> tuple[str, str]:
-    incoming = request.headers.get("traceparent", "").lower()
-    match = TRACEPARENT_PATTERN.fullmatch(incoming)
-    if match:
-        return match.group(1), incoming
-    trace_id = uuid4().hex
-    span_id = uuid4().hex[:16]
-    return trace_id, f"00-{trace_id}-{span_id}-01"
-
-
 def _problem_response(
     request: Request,
     *,
@@ -100,14 +87,13 @@ def _problem_response(
     slug: str,
     errors: list[dict] | None = None,
 ) -> JSONResponse:
-    trace_id = getattr(request.state, "trace_id", _trace_context(request)[0])
     problem = Problem(
         type=f"https://cafeteria.example/problems/{slug}",
         title=title,
         status=status,
         detail=detail,
         code=code,
-        trace_id=trace_id,
+        trace_id=request.state.trace_id,
         instance=request.url.path,
         errors=errors,
     )
@@ -197,62 +183,23 @@ def create_app(
     application.state.loyalty_client = configured_loyalty_client
     application.state.app_version = settings.app_version
 
-    @application.middleware("http")
-    async def request_context(request: Request, call_next):
-        started = perf_counter()
-        supplied_request_id = request.headers.get("X-Request-ID")
-        try:
-            request_id = UUID(supplied_request_id) if supplied_request_id else uuid4()
-        except ValueError:
-            request.state.trace_id, request.state.traceparent = _trace_context(request)
-            response = _problem_response(
-                request,
-                status=422,
-                title="Encabezado inválido",
-                detail="X-Request-ID debe ser un UUID válido.",
-                code="VALIDATION_ERROR",
-                slug="validation-error",
-            )
-            response.headers["X-Request-ID"] = str(uuid4())
-            return response
-
-        request.state.request_id = str(request_id)
-        request.state.trace_id, request.state.traceparent = _trace_context(request)
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = request.state.request_id
-
-        route = request.scope.get("route")
-        route_path = getattr(route, "path", "unmatched")
-        duration = perf_counter() - started
-        HTTP_REQUESTS.labels(
-            service="svc-pedidos",
-            method=request.method,
-            route=route_path,
-            status_code=str(response.status_code),
-        ).inc()
-        HTTP_DURATION.labels(
-            service="svc-pedidos",
-            method=request.method,
-            route=route_path,
-        ).observe(duration)
-        LOGGER.info(
-            json.dumps(
-                {
-                    "timestamp": datetime.now(UTC).isoformat(),
-                    "level": "INFO",
-                    "service": "svc-pedidos",
-                    "message": "request_completed",
-                    "method": request.method,
-                    "path": request.url.path,
-                    "route": route_path,
-                    "status_code": response.status_code,
-                    "duration_ms": round(duration * 1000, 3),
-                    "request_id": request.state.request_id,
-                    "trace_id": request.state.trace_id,
-                }
-            )
+    def invalid_request_id(request: Request) -> JSONResponse:
+        return _problem_response(
+            request,
+            status=422,
+            title="Encabezado inválido",
+            detail="X-Request-ID debe ser un UUID válido.",
+            code="VALIDATION_ERROR",
+            slug="validation-error",
         )
-        return response
+
+    install_observability(
+        application,
+        logger=LOGGER,
+        requests=HTTP_REQUESTS,
+        duration=HTTP_DURATION,
+        invalid_response=invalid_request_id,
+    )
 
     @application.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
