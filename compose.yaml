@@ -72,6 +72,9 @@ services:
       MENU_URL: http://svc-menu:8001
       LOYALTY_URL: http://svc-lealtad:8003
       HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-3}
+      LOYALTY_RETRY_ENABLED: ${LOYALTY_RETRY_ENABLED:-true}
+      LOYALTY_RETRY_INTERVAL_SECONDS: ${LOYALTY_RETRY_INTERVAL_SECONDS:-900}
+      LOYALTY_RETRY_BATCH_SIZE: ${LOYALTY_RETRY_BATCH_SIZE:-100}
     depends_on:
       postgres:
         condition: service_healthy

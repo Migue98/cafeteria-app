@@ -30,6 +30,11 @@ GET /metrics  # formato Prometheus
 
 También tendrán logs JSON en stdout con `timestamp`, `level`, `service`, `message`, `trace_id` y `span_id`. Los errores HTTP no incluirán trazas internas ni credenciales.
 
+Cuando `svc-lealtad` no esté disponible, `svc-pedidos` conservará el pedido con
+`loyalty_status=pending`. Un trabajador ejecutará un lote al iniciar y cada 15
+minutos para recuperar automáticamente esos puntos. Cada acreditación seguirá
+siendo idempotente por `order_id`.
+
 ## Métricas
 
 Todos los servicios expondrán peticiones por código HTTP y un histograma de latencia. Los servicios de pedidos y lealtad serán dueños de sus respectivas métricas de negocio:

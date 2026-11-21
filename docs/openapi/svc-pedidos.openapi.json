@@ -47,7 +47,7 @@
         "tags": ["pedidos"],
         "operationId": "createOrder",
         "summary": "Crea y confirma un pedido",
-        "description": "Consulta nombres, disponibilidad y precios actuales en svc-menu. La falla de lealtad no revierte un pedido ya guardado: loyalty_status queda pending.",
+        "description": "Consulta nombres, disponibilidad y precios actuales en svc-menu. La falla de lealtad no revierte un pedido ya guardado: loyalty_status queda pending y se recupera mediante reintentos automáticos o el endpoint manual.",
         "parameters": [
           {"$ref": "#/components/parameters/IdempotencyKey"},
           {"$ref": "#/components/parameters/RequestId"}

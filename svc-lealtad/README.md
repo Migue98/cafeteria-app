@@ -70,7 +70,7 @@ podman compose down --volumes
 cd svc-lealtad
 python -m venv .venv
 source .venv/bin/activate  # En PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -p no:cacheprovider
 ruff check app tests
 ruff format --check app tests

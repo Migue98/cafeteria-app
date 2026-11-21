@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from uuid import uuid4
 
 import pytest
 
 from .conftest import ApiClient, BrowserSession
-
 
 pytestmark = pytest.mark.e2e
 
@@ -180,8 +180,18 @@ def test_metrics_expose_business_and_http_signals(api: ApiClient) -> None:
     expected = {
         api.frontend_url: ("http_requests_total",),
         api.menu_url: ("http_requests_total",),
-        api.orders_url: ("http_requests_total", "cafe_orders_total", "cafe_order_value_cents_total"),
-        api.loyalty_url: ("http_requests_total", "cafe_loyalty_points_total", "cafe_loyalty_awards_total"),
+        api.orders_url: (
+            "http_requests_total",
+            "cafe_orders_total",
+            "cafe_order_value_cents_total",
+            "cafe_loyalty_pending_orders",
+            "cafe_loyalty_retry_attempts_total",
+        ),
+        api.loyalty_url: (
+            "http_requests_total",
+            "cafe_loyalty_points_total",
+            "cafe_loyalty_awards_total",
+        ),
     }
 
     for url, metrics in expected.items():
@@ -189,6 +199,50 @@ def test_metrics_expose_business_and_http_signals(api: ApiClient) -> None:
         assert response.status == 200
         for metric in metrics:
             assert metric in response.body
+
+
+def test_pending_loyalty_recovers_automatically(
+    api: ApiClient, compose_command: list[str]
+) -> None:
+    customer_id = str(uuid4())
+    subprocess.run(
+        [*compose_command, "stop", "svc-lealtad"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        created = create_order(api, order_payload(customer_id))
+        assert created.status == 201
+        assert created.body["loyalty_status"] == "pending"
+    finally:
+        subprocess.run(
+            [*compose_command, "start", "svc-lealtad"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    api.wait_until_healthy(timeout_seconds=90)
+    deadline = time.monotonic() + 20
+    fetched = None
+    while time.monotonic() < deadline:
+        fetched = api.json(
+            "GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}"
+        )
+        if fetched.status == 200 and fetched.body["loyalty_status"] == "awarded":
+            break
+        time.sleep(0.5)
+
+    assert fetched is not None
+    assert fetched.status == 200
+    assert fetched.body["loyalty_status"] == "awarded"
+    assert fetched.body["points_earned"] == 7
+    balance = api.json(
+        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
+    )
+    assert balance.status == 200
+    assert balance.body["balance"] == 7
 
 
 def test_data_survives_postgres_restart(

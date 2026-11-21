@@ -8,7 +8,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT = os.getenv("E2E_COMPOSE_PROJECT", "cafeteria-e2e")
 ENGINE = shlex.split(os.getenv("CONTAINER_ENGINE", "docker"))
@@ -29,6 +28,9 @@ def main() -> int:
             "MENU_PORT": os.getenv("E2E_MENU_PORT", "18001"),
             "ORDERS_PORT": os.getenv("E2E_ORDERS_PORT", "18002"),
             "LOYALTY_PORT": os.getenv("E2E_LOYALTY_PORT", "18003"),
+            "LOYALTY_RETRY_INTERVAL_SECONDS": os.getenv(
+                "E2E_LOYALTY_RETRY_INTERVAL_SECONDS", "2"
+            ),
         }
     )
     test_env = compose_env.copy()
@@ -56,9 +58,14 @@ def main() -> int:
     finally:
         if os.getenv("KEEP_E2E_STACK") != "1":
             try:
-                run([*COMPOSE, "down", "--volumes", "--remove-orphans"], env=compose_env)
+                run(
+                    [*COMPOSE, "down", "--volumes", "--remove-orphans"], env=compose_env
+                )
             except subprocess.CalledProcessError:
-                print("No fue posible limpiar el stack E2E automáticamente.", file=sys.stderr)
+                print(
+                    "No fue posible limpiar el stack E2E automáticamente.",
+                    file=sys.stderr,
+                )
     return 0
 
 

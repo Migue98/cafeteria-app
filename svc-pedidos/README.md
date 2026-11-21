@@ -23,7 +23,9 @@ El servicio obtiene nombre, SKU, disponibilidad y precio desde `svc-menu`; no
 confía en precios enviados por el navegador. Después guarda el pedido como
 confirmado y solicita los puntos. Si lealtad falla, responde con el pedido
 confirmado y `loyalty_status=pending`, que puede recuperarse posteriormente con
-el endpoint de reintento.
+el endpoint de reintento. Además, un trabajador interno busca pendientes al
+arrancar y cada 15 minutos. La acreditación usa el ID del pedido como clave
+idempotente, por lo que varios intentos no duplican puntos.
 
 `Idempotency-Key` evita pedidos duplicados. Repetir la misma solicitud devuelve
 el pedido original con HTTP 200 y `replayed=true`; reutilizar la clave con otro
@@ -66,7 +68,7 @@ podman compose down --volumes
 cd svc-pedidos
 python -m venv .venv
 source .venv/bin/activate  # En PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -p no:cacheprovider
 ruff check app tests
 ruff format --check app tests
@@ -80,6 +82,13 @@ Variables disponibles:
 | `MENU_URL` | `http://localhost:8001` |
 | `LOYALTY_URL` | `http://localhost:8003` |
 | `HTTP_TIMEOUT_SECONDS` | `3` |
+| `LOYALTY_RETRY_ENABLED` | `true` |
+| `LOYALTY_RETRY_INTERVAL_SECONDS` | `900` |
+| `LOYALTY_RETRY_BATCH_SIZE` | `100` |
 | `APP_VERSION` | `dev` |
+
+Las métricas `cafe_loyalty_pending_orders` y
+`cafe_loyalty_retry_attempts_total{outcome=...}` permiten observar la cola y el
+resultado de cada intento automático.
 
 Las credenciales del Compose son únicamente para desarrollo local.

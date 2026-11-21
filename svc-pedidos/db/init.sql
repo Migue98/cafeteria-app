@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS orders_customer_created_idx
     ON orders (customer_id, created_at DESC);
 
+CREATE INDEX IF NOT EXISTS orders_loyalty_pending_idx
+    ON orders (created_at, id)
+    WHERE loyalty_status = 'pending';
+
 CREATE TABLE IF NOT EXISTS order_items (
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     position SMALLINT NOT NULL CHECK (position > 0),

@@ -37,6 +37,8 @@ class OrderRepository(Protocol):
         self, customer_id: UUID, *, limit: int, offset: int
     ) -> tuple[list[Order], int]: ...
 
+    def list_pending_loyalty(self, *, limit: int) -> tuple[list[Order], int]: ...
+
     def mark_loyalty_awarded(self, order_id: UUID, points_earned: int) -> Order: ...
 
 
@@ -208,3 +210,24 @@ class PostgresOrderRepository:
                 return self._hydrate_order(connection, row)
         except psycopg.Error as exc:
             raise RepositoryUnavailable("No fue posible actualizar los puntos") from exc
+
+    def list_pending_loyalty(self, *, limit: int) -> tuple[list[Order], int]:
+        try:
+            with self._connect() as connection:
+                total_row = connection.execute(
+                    "SELECT COUNT(*) AS total FROM orders WHERE loyalty_status = 'pending'"
+                ).fetchone()
+                rows = connection.execute(
+                    """
+                    SELECT * FROM orders
+                    WHERE loyalty_status = 'pending'
+                    ORDER BY created_at, id
+                    LIMIT %(limit)s
+                    """,
+                    {"limit": limit},
+                ).fetchall()
+                orders = [self._hydrate_order(connection, row) for row in rows]
+        except psycopg.Error as exc:
+            raise RepositoryUnavailable("No fue posible consultar los puntos pendientes") from exc
+        total = int(total_row["total"]) if total_row is not None else 0
+        return orders, total

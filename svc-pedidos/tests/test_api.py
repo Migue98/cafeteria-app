@@ -5,6 +5,7 @@ from uuid import UUID
 from fastapi.testclient import TestClient
 
 from app.clients import DependencyUnavailable, LoyaltyUnavailable
+from app.loyalty_retry import retry_pending_loyalty
 from app.main import create_app
 from app.models import MenuProduct, Order
 from app.repository import StoredOrder
@@ -48,6 +49,11 @@ class FakeRepository:
         )
         self.orders[order_id] = order
         return order
+
+    def list_pending_loyalty(self, *, limit: int):
+        orders = [order for order in self.orders.values() if order.loyalty_status == "pending"]
+        orders.sort(key=lambda order: (order.created_at, order.id))
+        return orders[:limit], len(orders)
 
 
 class FakeMenu:
@@ -300,6 +306,37 @@ def test_retry_returns_503_while_loyalty_is_down() -> None:
     assert response.json()["code"] == "LOYALTY_UNAVAILABLE"
 
 
+def test_automatic_retry_awards_pending_orders_in_a_batch() -> None:
+    loyalty = FakeLoyalty(fails=True)
+    client, repository, _ = make_client(loyalty=loyalty)
+    first = create_order(client, key="pending-order-001").json()
+    second = create_order(client, key="pending-order-002").json()
+    loyalty.fails = False
+
+    result = retry_pending_loyalty(repository, loyalty, batch_size=100)
+
+    assert result.pending_total == 2
+    assert result.attempted == 2
+    assert result.awarded == 2
+    assert result.failed == 0
+    assert repository.orders[UUID(first["id"])].loyalty_status == "awarded"
+    assert repository.orders[UUID(second["id"])].loyalty_status == "awarded"
+
+
+def test_automatic_retry_keeps_order_pending_when_loyalty_is_down() -> None:
+    loyalty = FakeLoyalty(fails=True)
+    client, repository, _ = make_client(loyalty=loyalty)
+    created = create_order(client, key="pending-order-003").json()
+
+    result = retry_pending_loyalty(repository, loyalty, batch_size=100)
+
+    assert result.pending_total == 1
+    assert result.attempted == 1
+    assert result.awarded == 0
+    assert result.failed == 1
+    assert repository.orders[UUID(created["id"])].loyalty_status == "pending"
+
+
 def test_idempotency_key_is_required() -> None:
     client, _, _ = make_client()
 
@@ -318,6 +355,8 @@ def test_metrics_and_openapi_paths_are_available() -> None:
     assert metrics.status_code == 200
     assert "cafe_orders_total" in metrics.text
     assert "cafe_order_value_cents_total" in metrics.text
+    assert "cafe_loyalty_pending_orders" in metrics.text
+    assert "cafe_loyalty_retry_attempts_total" in metrics.text
     assert {
         "/health",
         "/metrics",

@@ -61,6 +61,8 @@ Los detalles están en la [arquitectura](docs/architecture.md) y la
 - OpenAPI 3.1 es la fuente de verdad de los tres backends.
 - Las rutas de negocio usan `/api/v1`.
 - Todos los servicios exponen `GET /health` y `GET /metrics`.
+- Pedidos recupera automáticamente las acreditaciones pendientes cuando
+  lealtad vuelve a estar disponible.
 - Los importes se expresan en centavos enteros y moneda MXN.
 - Los errores usan `application/problem+json`.
 - La creación de pedidos y la acreditación de puntos requieren
@@ -129,7 +131,7 @@ Para validar el servicio implementado:
 
 ```bash
 cd svc-menu
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -p no:cacheprovider
 ruff check app tests
 ruff format --check app tests

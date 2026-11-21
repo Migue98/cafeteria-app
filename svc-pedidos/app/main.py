@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import re
+from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime
 from time import perf_counter
 from typing import Annotated
@@ -26,6 +28,7 @@ from .clients import (
     MenuClient,
 )
 from .config import load_settings
+from .loyalty_retry import loyalty_retry_loop
 from .models import (
     CreateOrderRequest,
     DependencyHealth,
@@ -153,18 +156,45 @@ def create_app(
     loyalty_client: LoyaltyClient | None = None,
 ) -> FastAPI:
     settings = load_settings()
+    configured_repository = repository or PostgresOrderRepository(settings.database_url)
+    configured_menu_client = menu_client or HttpMenuClient(
+        settings.menu_url, settings.http_timeout_seconds
+    )
+    configured_loyalty_client = loyalty_client or HttpLoyaltyClient(
+        settings.loyalty_url, settings.http_timeout_seconds
+    )
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        retry_task: asyncio.Task[None] | None = None
+        if settings.loyalty_retry_enabled:
+            retry_task = asyncio.create_task(
+                loyalty_retry_loop(
+                    configured_repository,
+                    configured_loyalty_client,
+                    interval_seconds=settings.loyalty_retry_interval_seconds,
+                    batch_size=settings.loyalty_retry_batch_size,
+                ),
+                name="loyalty-retry",
+            )
+        app.state.loyalty_retry_task = retry_task
+        try:
+            yield
+        finally:
+            if retry_task is not None:
+                retry_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await retry_task
+
     application = FastAPI(
         title="Cafetería - Servicio de pedidos",
         version="0.1.0",
         description="Creación, persistencia y consulta de pedidos.",
+        lifespan=lifespan,
     )
-    application.state.repository = repository or PostgresOrderRepository(settings.database_url)
-    application.state.menu_client = menu_client or HttpMenuClient(
-        settings.menu_url, settings.http_timeout_seconds
-    )
-    application.state.loyalty_client = loyalty_client or HttpLoyaltyClient(
-        settings.loyalty_url, settings.http_timeout_seconds
-    )
+    application.state.repository = configured_repository
+    application.state.menu_client = configured_menu_client
+    application.state.loyalty_client = configured_loyalty_client
     application.state.app_version = settings.app_version
 
     @application.middleware("http")

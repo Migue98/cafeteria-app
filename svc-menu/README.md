@@ -53,7 +53,7 @@ Levanta PostgreSQL con Compose y ejecuta FastAPI desde un entorno virtual:
 cd svc-menu
 python -m venv .venv
 source .venv/bin/activate  # En PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
