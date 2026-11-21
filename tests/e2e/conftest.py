@@ -14,6 +14,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
+from uuid import UUID
 
 import pytest
 
@@ -69,8 +70,20 @@ class ApiClient:
                 body,
             )
 
-    def text(self, url: str, *, timeout: float = 5) -> HttpResult:
-        request = Request(url, headers={"Accept": "text/plain"}, method="GET")
+    def text(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        headers: dict[str, str] | None = None,
+        timeout: float = 5,
+    ) -> HttpResult:
+        request = Request(
+            url,
+            data=b"" if method != "GET" else None,
+            headers={"Accept": "text/plain", **(headers or {})},
+            method=method,
+        )
         with urlopen(request, timeout=timeout) as response:
             return HttpResult(
                 response.status,
@@ -111,7 +124,13 @@ class BrowserSession:
     """Navegador HTTP mínimo con cookies y seguimiento de redirecciones."""
 
     def __init__(self) -> None:
-        self._opener = build_opener(HTTPCookieProcessor(CookieJar()))
+        self._cookies = CookieJar()
+        self._opener = build_opener(HTTPCookieProcessor(self._cookies))
+
+    def cookie_header(self, url: str) -> str:
+        request = Request(url)
+        self._cookies.add_cookie_header(request)
+        return request.get_header("Cookie", "")
 
     def request(
         self, method: str, url: str, *, headers: dict[str, str] | None = None
@@ -145,6 +164,51 @@ def compose_command() -> list[str]:
     project = os.getenv("E2E_COMPOSE_PROJECT", "cafeteria-e2e")
     compose_file = os.getenv("E2E_COMPOSE_FILE", str(repository / "compose.yaml"))
     return [*engine, "compose", "-p", project, "-f", compose_file]
+
+
+@pytest.fixture
+def loyalty_snapshot(compose_command: list[str]):
+    """Lee el saldo y los movimientos persistidos para un UUID de prueba."""
+
+    def read(customer_id: str) -> dict:
+        customer_id = str(UUID(customer_id))
+        sql = f"""
+            SELECT json_build_object(
+                'account_count', (SELECT COUNT(*) FROM loyalty_accounts
+                                  WHERE customer_id = '{customer_id}'::uuid),
+                'balance', COALESCE((SELECT balance FROM loyalty_accounts
+                                     WHERE customer_id = '{customer_id}'::uuid), 0),
+                'movement_count', COUNT(*),
+                'distinct_orders', COUNT(DISTINCT order_id),
+                'movement_points', COALESCE(SUM(points_earned), 0)
+            )
+            FROM loyalty_movements WHERE customer_id = '{customer_id}'::uuid
+        """
+        result = subprocess.run(
+            [
+                *compose_command,
+                "exec",
+                "-T",
+                "postgres",
+                "psql",
+                "-U",
+                os.getenv("POSTGRES_USER", "cafeteria"),
+                "-d",
+                os.getenv("POSTGRES_DB", "cafeteria"),
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-A",
+                "-t",
+                "-c",
+                sql,
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return json.loads(result.stdout.strip())
+
+    return read
 
 
 @pytest.fixture

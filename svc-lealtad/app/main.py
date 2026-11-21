@@ -231,19 +231,25 @@ def create_app(repository: LoyaltyRepository | None = None) -> FastAPI:
         ],
     ) -> PointAward:
         body_hash = _request_hash(payload)
-        stored = repository.get_by_idempotency_key(idempotency_key)
-        if stored is not None:
+
+        def replay_existing(stored: StoredAward, *, order_conflict: bool) -> PointAward:
+            replay = _replay(stored, body_hash, order_conflict=order_conflict)
+            if order_conflict:
+                reserved = repository.bind_idempotency_key(
+                    idempotency_key, stored.award.movement_id
+                )
+                replay = _replay(reserved, body_hash, order_conflict=False)
             response.status_code = 200
-            replay = _replay(stored, body_hash, order_conflict=False)
             AWARDS_TOTAL.labels(status="replayed").inc()
             return replay
 
+        stored = repository.get_by_idempotency_key(idempotency_key)
+        if stored is not None:
+            return replay_existing(stored, order_conflict=False)
+
         stored = repository.get_by_order_id(payload.order_id)
         if stored is not None:
-            response.status_code = 200
-            replay = _replay(stored, body_hash, order_conflict=True)
-            AWARDS_TOTAL.labels(status="replayed").inc()
-            return replay
+            return replay_existing(stored, order_conflict=True)
 
         points_earned = payload.amount_cents // 1000
         award = repository.save_award(
@@ -257,16 +263,10 @@ def create_app(repository: LoyaltyRepository | None = None) -> FastAPI:
         if award is None:
             stored = repository.get_by_idempotency_key(idempotency_key)
             if stored is not None:
-                response.status_code = 200
-                replay = _replay(stored, body_hash, order_conflict=False)
-                AWARDS_TOTAL.labels(status="replayed").inc()
-                return replay
+                return replay_existing(stored, order_conflict=False)
             stored = repository.get_by_order_id(payload.order_id)
             if stored is not None:
-                response.status_code = 200
-                replay = _replay(stored, body_hash, order_conflict=True)
-                AWARDS_TOTAL.labels(status="replayed").inc()
-                return replay
+                return replay_existing(stored, order_conflict=True)
             raise RepositoryUnavailable("No fue posible recuperar la acreditación concurrente")
 
         POINTS_TOTAL.inc(points_earned)

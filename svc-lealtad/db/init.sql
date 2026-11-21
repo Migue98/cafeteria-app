@@ -20,3 +20,14 @@ CREATE TABLE IF NOT EXISTS loyalty_movements (
 
 CREATE INDEX IF NOT EXISTS loyalty_movements_customer_awarded_idx
     ON loyalty_movements (customer_id, awarded_at DESC);
+
+-- Una acreditación puede repetirse con claves distintas; todas quedan reservadas.
+CREATE TABLE IF NOT EXISTS loyalty_request_keys (
+    idempotency_key VARCHAR(128) PRIMARY KEY,
+    movement_id UUID NOT NULL REFERENCES loyalty_movements(movement_id)
+);
+
+-- Migración idempotente para movimientos creados antes de registrar claves alternas.
+INSERT INTO loyalty_request_keys (idempotency_key, movement_id)
+SELECT idempotency_key, movement_id FROM loyalty_movements
+ON CONFLICT (idempotency_key) DO NOTHING;

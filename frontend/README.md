@@ -21,6 +21,11 @@ no repiten la compra ni ejecutan la acreditación. Consulta la
 Los formularios funcionan con navegación HTML normal. HTMX mejora las
 operaciones del carrito sin convertir la aplicación en una SPA.
 
+El carrito prepara la clave idempotente antes de confirmar. Dos envíos con la
+misma cookie reutilizan esa clave; una compra posterior obtiene otra. Las
+[pruebas de concurrencia](../docs/concurrency-and-idempotency.md) verifican que
+un doble envío no cree dos pedidos.
+
 ## Desarrollo
 
 ```powershell

@@ -32,6 +32,8 @@ class LoyaltyRepository(Protocol):
 
     def get_by_order_id(self, order_id: UUID) -> StoredAward | None: ...
 
+    def bind_idempotency_key(self, key: str, movement_id: UUID) -> StoredAward: ...
+
     def save_award(
         self,
         payload: EarnPointsRequest,
@@ -87,12 +89,45 @@ class PostgresLoyaltyRepository:
         try:
             with self._connect() as connection:
                 row = connection.execute(
-                    "SELECT * FROM loyalty_movements WHERE idempotency_key = %(key)s",
+                    """
+                    SELECT movement.* FROM loyalty_movements AS movement
+                    JOIN loyalty_request_keys AS request_key
+                      ON request_key.movement_id = movement.movement_id
+                    WHERE request_key.idempotency_key = %(key)s
+                    """,
                     {"key": key},
                 ).fetchone()
         except psycopg.Error as exc:
             raise RepositoryUnavailable("No fue posible consultar la idempotencia") from exc
         return self._stored_award(row) if row is not None else None
+
+    def bind_idempotency_key(self, key: str, movement_id: UUID) -> StoredAward:
+        try:
+            with self._connect() as connection:
+                connection.execute(
+                    """
+                    INSERT INTO loyalty_request_keys (idempotency_key, movement_id)
+                    VALUES (%(key)s, %(movement_id)s)
+                    ON CONFLICT (idempotency_key) DO NOTHING
+                    """,
+                    {"key": key, "movement_id": movement_id},
+                )
+                # Tras esperar un conflicto, READ COMMITTED observa al ganador
+                # en esta segunda sentencia; el llamador compara el request_hash.
+                row = connection.execute(
+                    """
+                    SELECT movement.* FROM loyalty_movements AS movement
+                    JOIN loyalty_request_keys AS request_key
+                      ON request_key.movement_id = movement.movement_id
+                    WHERE request_key.idempotency_key = %(key)s
+                    """,
+                    {"key": key},
+                ).fetchone()
+                if row is None:
+                    raise RepositoryUnavailable("No fue posible reservar la clave de idempotencia")
+                return self._stored_award(row)
+        except psycopg.Error as exc:
+            raise RepositoryUnavailable("No fue posible reservar la clave de idempotencia") from exc
 
     def get_by_order_id(self, order_id: UUID) -> StoredAward | None:
         try:
@@ -165,6 +200,13 @@ class PostgresLoyaltyRepository:
                         "occurred_at": payload.occurred_at,
                         "awarded_at": awarded_at,
                     },
+                )
+                connection.execute(
+                    """
+                    INSERT INTO loyalty_request_keys (idempotency_key, movement_id)
+                    VALUES (%(key)s, %(movement_id)s)
+                    """,
+                    {"key": idempotency_key, "movement_id": movement_id},
                 )
             return PointAward(
                 movement_id=movement_id,

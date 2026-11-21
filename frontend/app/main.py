@@ -76,6 +76,11 @@ def _cart(request: Request) -> dict[int, int]:
 
 def _save_cart(request: Request, cart: dict[int, int]) -> None:
     request.session["cart"] = {str(key): value for key, value in cart.items()}
+    if cart:
+        _customer_id(request)
+        _checkout_key(request, cart)
+    else:
+        request.session.pop("checkout_attempt", None)
 
 
 def _cart_context(
@@ -187,6 +192,9 @@ def create_app(
         checkout_error: str | None = None,
     ) -> dict[str, Any]:
         customer_id = _customer_id(request)
+        cart = _cart(request)
+        if cart:
+            _checkout_key(request, cart)
         products = backend.list_products(
             request_id=request.state.request_id, traceparent=request.state.traceparent
         )
@@ -216,7 +224,7 @@ def create_app(
             "balance": balance,
             "balance_available": balance_available,
             "checkout_error": checkout_error,
-            **_cart_context(_cart(request), products),
+            **_cart_context(cart, products),
         }
 
     def render_home(

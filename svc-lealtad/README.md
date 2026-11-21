@@ -1,5 +1,10 @@
 # Servicio de lealtad
 
+Las claves de idempotencia, incluidas las utilizadas para repetir un movimiento,
+se reservan en `loyalty_request_keys`. Si tienes un volumen con datos existentes,
+aplica el script idempotente antes de iniciar la nueva versión; consulta la
+[migración y las garantías de concurrencia](../docs/concurrency-and-idempotency.md).
+
 Microservicio FastAPI responsable del libro de movimientos y del saldo de
 puntos por cliente. Una falla temporal de este servicio nunca elimina ni
 revierte un pedido confirmado.

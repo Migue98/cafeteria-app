@@ -12,6 +12,8 @@ La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro
 - compra desde la interfaz HTML y consulta posterior del historial;
 - consulta posterior del pedido y saldo;
 - idempotencia sin duplicar pedidos ni puntos;
+- compras y acreditaciones simultáneas, doble envío del checkout, claves alternas
+  reservadas, migración idempotente y saldo contrastado con PostgreSQL;
 - recuperación automática de puntos después de restaurar `svc-lealtad`;
 - historial accesible sin lealtad y actualización de los fragmentos de puntos,
   sin repetir pedidos ni acreditaciones;
@@ -56,3 +58,13 @@ python -m pytest tests ../tests/observability -p no:cacheprovider
 Esta suite comprueba trazas, logs de errores, aislamiento concurrente y paridad
 de la implementación común. Consulta la
 [guía de logs y correlación](../docs/application-observability.md).
+
+## Concurrencia y ejecución continua
+
+`tests/e2e/test_concurrency.py` sincroniza las solicitudes y comprueba pedidos,
+movimientos y saldo persistidos. La [guía de concurrencia](../docs/concurrency-and-idempotency.md)
+describe los casos y la migración de claves de lealtad.
+
+El workflow `Integrated E2E` ejecuta el mismo flujo Compose en pushes a `main` y
+Pull Requests que afecten a la aplicación. Las pruebas se mantienen en serie a
+nivel de escenario: no uses `pytest-xdist` sobre este proyecto compartido.

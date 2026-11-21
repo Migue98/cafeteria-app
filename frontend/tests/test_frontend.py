@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
@@ -353,3 +354,33 @@ def test_empty_history_handles_missing_balance_without_polling() -> None:
     assert "Todavía no tienes pedidos" in response.text
     assert "Saldo no disponible" in response.text
     assert 'hx-trigger="every 15s"' not in response.text
+
+
+def test_duplicate_checkout_requests_use_the_same_prepared_key() -> None:
+    owner, gateway = make_client()
+    owner.post("/cart/items/1", headers={"HX-Request": "true"})
+    snapshot = dict(owner.cookies)
+
+    def checkout_once(_):
+        with TestClient(create_app(gateway)) as independent_client:
+            independent_client.cookies.update(snapshot)
+            return independent_client.post("/checkout")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(pool.map(checkout_once, range(2)))
+
+    assert all(response.status_code == 200 for response in responses)
+    assert len(gateway.create_calls) == 2
+    assert len({call["idempotency_key"] for call in gateway.create_calls}) == 1
+    assert len({call["customer_id"] for call in gateway.create_calls}) == 1
+
+
+def test_starting_another_purchase_rotates_checkout_key() -> None:
+    client, gateway = make_client()
+    client.post("/cart/items/1")
+    client.post("/checkout")
+    client.post("/cart/items/1")
+    client.post("/checkout")
+
+    assert len({call["idempotency_key"] for call in gateway.create_calls}) == 2
+    assert len(gateway.orders) == 2

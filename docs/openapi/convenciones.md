@@ -47,6 +47,11 @@ Es obligatorio en operaciones que crean efectos:
 
 Repetir una solicitud con la misma clave y el mismo cuerpo devuelve el resultado original sin duplicar datos. Reutilizar la clave con otro cuerpo produce `409 IDEMPOTENCY_KEY_REUSED`.
 
+Lealtad también devuelve el movimiento original cuando un pedido se repite con
+otra clave y los mismos datos. Esa clave alterna queda reservada al movimiento
+original; no podrá usarse después para acreditar otro pedido. Las reservas
+concurrentes se resuelven de forma atómica en PostgreSQL.
+
 ## Errores
 
 Los errores usan `application/problem+json`:

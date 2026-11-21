@@ -28,6 +28,12 @@ class FakeRepository:
     def get_by_order_id(self, order_id: UUID):
         return self.by_order.get(order_id)
 
+    def bind_idempotency_key(self, key: str, movement_id: UUID):
+        stored = next(
+            award for award in self.by_order.values() if award.award.movement_id == movement_id
+        )
+        return self.by_key.setdefault(key, stored)
+
     def save_award(
         self,
         payload: EarnPointsRequest,
@@ -174,6 +180,24 @@ def test_same_order_with_other_key_replays() -> None:
     assert second.json()["movement_id"] == first.json()["movement_id"]
     assert second.json()["replayed"] is True
     assert len(repository.by_order) == 1
+
+
+def test_key_used_to_replay_order_cannot_be_reused_for_another_order() -> None:
+    client, repository = make_client()
+    earn(client)
+    replay = earn(client, key="loyalty-alias-002")
+    assert replay.status_code == 200
+
+    response = earn(
+        client,
+        key="loyalty-alias-002",
+        payload=award_payload(order_id=UUID("33333333-3333-4333-8333-333333333333")),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert len(repository.by_order) == 1
+    assert repository.get_balance(CUSTOMER_ID).balance == 10
 
 
 def test_same_order_with_different_data_conflicts() -> None:
