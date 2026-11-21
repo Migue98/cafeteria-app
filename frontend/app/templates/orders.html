@@ -3,44 +3,5 @@
 {% block title %}Mis pedidos · Café Nube{% endblock %}
 
 {% block content %}
-<main class="history-page">
-  <header class="history-header">
-    <div>
-      <p class="eyebrow">Tu historial</p>
-      <h1>Mis pedidos</h1>
-      <p>Consulta lo que has pedido y los puntos acumulados.</p>
-    </div>
-    <div class="history-balance"><strong>{{ balance }}</strong><span>puntos</span></div>
-  </header>
-
-  {% if orders %}
-  <div class="order-list">
-    {% for order in orders %}
-    <article class="order-card">
-      <div class="order-card-heading">
-        <div>
-          <span>{{ order.created_at|date_time }}</span>
-          <h2>Pedido {{ order.id|string|truncate(13, True, '') }}</h2>
-        </div>
-        <span class="status {% if order.loyalty_status == 'pending' %}status-pending{% endif %}">
-          {% if order.loyalty_status == 'awarded' %}Puntos acreditados{% else %}Puntos pendientes{% endif %}
-        </span>
-      </div>
-      <ul>
-        {% for item in order['items'] %}
-        <li><span>{{ item.quantity }} × {{ item.product_name }}</span><strong>{{ item.line_total_cents|money }}</strong></li>
-        {% endfor %}
-      </ul>
-      <div class="order-card-total"><span>Total</span><strong>{{ order.total_cents|money }}</strong></div>
-    </article>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div class="empty-state history-empty">
-    <strong>Todavía no tienes pedidos.</strong>
-    <p>Tu primera pausa rica está a unos cuantos clics.</p>
-    <a class="button button-primary" href="/">Explorar el menú</a>
-  </div>
-  {% endif %}
-</main>
+{% include "_order_history.html" %}
 {% endblock %}

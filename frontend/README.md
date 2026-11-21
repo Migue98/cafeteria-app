@@ -12,6 +12,12 @@ navegador habla únicamente con este servicio; el frontend consume por HTTP a
 4. Recibo con total y puntos obtenidos.
 5. Historial de pedidos y saldo actual.
 
+Si lealtad está caído, el historial conserva los pedidos y muestra **Saldo no
+disponible**. El recibo y el historial consultan el estado cada 15 segundos
+mientras haya puntos pendientes y dejan de hacerlo al acreditarse. Las consultas
+no repiten la compra ni ejecutan la acreditación. Consulta la
+[guía de recuperación](../docs/frontend-loyalty-recovery.md).
+
 Los formularios funcionan con navegación HTML normal. HTMX mejora las
 operaciones del carrito sin convertir la aplicación en una SPA.
 

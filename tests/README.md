@@ -13,6 +13,8 @@ La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro
 - consulta posterior del pedido y saldo;
 - idempotencia sin duplicar pedidos ni puntos;
 - recuperación automática de puntos después de restaurar `svc-lealtad`;
+- historial accesible sin lealtad y actualización de los fragmentos de puntos,
+  sin repetir pedidos ni acreditaciones;
 - errores de validación y conflictos;
 - métricas HTTP y de negocio;
 - persistencia después de reiniciar PostgreSQL.

@@ -159,6 +159,9 @@ button, a { -webkit-tap-highlight-color: transparent; }
 .history-header > div > p:last-child { color: #d9cbc3; }
 .history-balance { align-items: baseline; background: var(--mint); border-radius: 18px; color: var(--espresso); display: flex; gap: 0.5rem; padding: 1rem 1.3rem; }
 .history-balance strong { font-family: Georgia, serif; font-size: 2.6rem; }
+.history-balance.balance-unavailable { align-items: start; flex-direction: column; max-width: 320px; }
+.history-balance.balance-unavailable strong { font-size: 1.4rem; }
+.history-balance.balance-unavailable span { font-size: 0.85rem; }
 .order-list { display: grid; gap: 1rem; margin: 0 auto; max-width: 1050px; padding: 4rem 1.5rem 6rem; }
 .order-card { background: white; border: 1px solid var(--line); border-radius: 18px; padding: 1.3rem; }
 .order-card-heading { align-items: start; display: flex; justify-content: space-between; }

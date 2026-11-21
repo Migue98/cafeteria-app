@@ -45,6 +45,8 @@ class FakeGateway:
         self.create_calls: list[dict[str, Any]] = []
         self.balance = 0
         self.closed = False
+        self.loyalty_available = True
+        self.orders_available = True
 
     def list_products(
         self, *, request_id: str, traceparent: str
@@ -86,13 +88,14 @@ class FakeGateway:
         ]
         total = sum(item["line_total_cents"] for item in order_items)
         points = total // 1000
-        self.balance += points
+        if self.loyalty_available:
+            self.balance += points
         order = {
             "id": str(uuid4()),
             "customer_id": customer_id,
             "status": "confirmed",
-            "loyalty_status": "awarded",
-            "points_earned": points,
+            "loyalty_status": "awarded" if self.loyalty_available else "pending",
+            "points_earned": points if self.loyalty_available else None,
             "currency": "MXN",
             "subtotal_cents": total,
             "total_cents": total,
@@ -107,11 +110,22 @@ class FakeGateway:
     def list_orders(
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> list[dict[str, Any]]:
+        if not self.orders_available:
+            raise BackendError("Pedidos no disponible.")
         return [order for order in self.orders if order["customer_id"] == customer_id]
+
+    def get_order(
+        self, *, order_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]:
+        if not self.orders_available:
+            raise BackendError("Pedidos no disponible.")
+        return next(order for order in self.orders if order["id"] == order_id)
 
     def get_balance(
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> dict[str, Any]:
+        if not self.loyalty_available:
+            raise BackendError("Lealtad no disponible.")
         return {"customer_id": customer_id, "balance": self.balance, "updated_at": None}
 
     def health(self, *, request_id: str, traceparent: str) -> dict[str, str]:
@@ -239,3 +253,103 @@ def test_menu_failure_has_user_friendly_page() -> None:
     assert response.status_code == 503
     assert "No pudimos servir esta página" in response.text
     assert "El menú no está disponible" in response.text
+
+
+def test_history_survives_loyalty_outage_and_marks_balance_unavailable() -> None:
+    client, gateway = make_client()
+    client.post("/cart/items/1")
+    client.post("/checkout")
+    gateway.loyalty_available = False
+
+    history = client.get("/orders")
+
+    assert history.status_code == 200
+    assert "Café americano" in history.text
+    assert "$35.00" in history.text
+    assert "Puntos acreditados" in history.text
+    assert "Saldo no disponible" in history.text
+    assert "None" not in history.text
+    assert 'hx-trigger="every 15s"' not in history.text
+    assert history.headers["cache-control"] == "private, no-store"
+
+
+def test_pending_points_refresh_receipt_and_history_without_repeating_checkout() -> (
+    None
+):
+    client, gateway = make_client()
+    gateway.loyalty_available = False
+    client.post("/cart/items/1")
+    receipt = client.post("/checkout")
+    order = gateway.orders[0]
+    endpoint = f"/orders/{order['id']}/points"
+
+    assert receipt.status_code == 200
+    assert "Puntos pendientes" in receipt.text
+    assert f'hx-get="{endpoint}"' in receipt.text
+    assert 'hx-trigger="every 15s"' in receipt.text
+    history = client.get("/orders")
+    assert history.status_code == 200
+    assert "Saldo no disponible" in history.text
+    assert "Puntos pendientes" in history.text
+    assert 'hx-get="/orders"' in history.text
+
+    # Simula que el worker confirmó la acreditación en el servicio de pedidos.
+    gateway.loyalty_available = True
+    gateway.balance = 3
+    order.update(loyalty_status="awarded", points_earned=3)
+    points = client.get(endpoint, headers={"HX-Request": "true"})
+    history = client.get("/orders", headers={"HX-Request": "true"})
+
+    assert points.status_code == 200
+    assert "+3 puntos" in points.text
+    assert "Tu nuevo saldo es de 3 puntos" in points.text
+    assert 'id="receipt-points"' in points.text
+    assert 'hx-trigger="every 15s"' not in points.text
+    assert "<!doctype" not in points.text
+    assert history.status_code == 200
+    assert "Puntos acreditados" in history.text
+    assert "Saldo no disponible" not in history.text
+    assert 'hx-trigger="every 15s"' not in history.text
+    assert 'id="order-history"' in history.text
+    assert "<!doctype" not in history.text
+    assert "HX-Request" in history.headers["vary"]
+    assert len(gateway.create_calls) == 1
+    assert len(gateway.orders) == 1
+
+
+def test_refresh_failure_preserves_existing_content() -> None:
+    client, gateway = make_client()
+    gateway.loyalty_available = False
+    client.post("/cart/items/1")
+    client.post("/checkout")
+    gateway.orders_available = False
+    points = client.get(f"/orders/{gateway.orders[0]['id']}/points")
+    history = client.get("/orders", headers={"HX-Request": "true"})
+    for response in (points, history):
+        assert response.status_code == 503
+        assert response.headers["HX-Reswap"] == "none"
+        assert response.headers["cache-control"] == "private, no-store"
+        assert response.text == ""
+    assert client.get("/orders").status_code == 503
+    assert len(gateway.create_calls) == 1
+
+
+def test_receipt_points_are_restricted_to_customer_session() -> None:
+    owner, gateway = make_client()
+    owner.post("/cart/items/1")
+    owner.post("/checkout")
+    stranger, _ = make_client(gateway)
+    response = stranger.get(f"/orders/{gateway.orders[0]['id']}/points")
+    assert response.status_code == 404
+    assert "Café americano" not in response.text
+    assert "+3 puntos" not in response.text
+
+
+def test_empty_history_handles_missing_balance_without_polling() -> None:
+    client, gateway = make_client()
+    gateway.loyalty_available = False
+    response = client.get("/orders")
+    assert response.status_code == 200
+    assert "Todavía no tienes pedidos" in response.text
+    assert "Saldo no disponible" in response.text
+    assert 'hx-trigger="every 15s"' not in response.text

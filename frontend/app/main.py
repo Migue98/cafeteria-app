@@ -170,6 +170,16 @@ def create_app(
         invalid_response=invalid_request_id,
     )
 
+    def customer_balance(request: Request, customer_id: str) -> int | None:
+        try:
+            return backend.get_balance(
+                customer_id=customer_id,
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
+            )["balance"]
+        except BackendError:
+            return None
+
     def menu_context(
         request: Request,
         *,
@@ -380,18 +390,11 @@ def create_app(
 
         _save_cart(request, {})
         request.session.pop("checkout_attempt", None)
-        try:
-            balance = backend.get_balance(
-                customer_id=customer_id,
-                request_id=request.state.request_id,
-                traceparent=request.state.traceparent,
-            )["balance"]
-        except BackendError:
-            balance = None
         return templates.TemplateResponse(
             request=request,
             name="receipt.html",
-            context={"order": order, "balance": balance},
+            context={"order": order, "balance": customer_balance(request, customer_id)},
+            headers={"Cache-Control": "private, no-store"},
         )
 
     @application.get("/orders", response_class=HTMLResponse, tags=["pedidos"])
@@ -403,12 +406,12 @@ def create_app(
                 request_id=request.state.request_id,
                 traceparent=request.state.traceparent,
             )
-            balance = backend.get_balance(
-                customer_id=customer_id,
-                request_id=request.state.request_id,
-                traceparent=request.state.traceparent,
-            )["balance"]
         except BackendError as exc:
+            if request.headers.get("HX-Request") == "true":
+                return Response(
+                    status_code=exc.status_code,
+                    headers={"HX-Reswap": "none", "Cache-Control": "private, no-store"},
+                )
             return templates.TemplateResponse(
                 request=request,
                 name="error.html",
@@ -417,12 +420,46 @@ def create_app(
             )
         return templates.TemplateResponse(
             request=request,
-            name="orders.html",
+            name=(
+                "_order_history.html"
+                if request.headers.get("HX-Request") == "true"
+                else "orders.html"
+            ),
             context={
                 "orders": order_items,
-                "balance": balance,
-                "customer_id": customer_id,
+                "balance": customer_balance(request, customer_id),
+                "has_pending": any(
+                    order["loyalty_status"] == "pending" for order in order_items
+                ),
             },
+            headers={"Cache-Control": "private, no-store", "Vary": "HX-Request"},
+        )
+
+    @application.get(
+        "/orders/{order_id}/points", response_class=HTMLResponse, tags=["pedidos"]
+    )
+    def order_points(request: Request, order_id: UUID) -> Response:
+        customer_id = _customer_id(request)
+        try:
+            order = backend.get_order(
+                order_id=str(order_id),
+                request_id=request.state.request_id,
+                traceparent=request.state.traceparent,
+            )
+        except BackendError as exc:
+            return Response(
+                status_code=exc.status_code,
+                headers={"HX-Reswap": "none", "Cache-Control": "private, no-store"},
+            )
+        if order["customer_id"] != customer_id:
+            return Response(
+                status_code=404, headers={"Cache-Control": "private, no-store"}
+            )
+        return templates.TemplateResponse(
+            request=request,
+            name="_receipt_points.html",
+            context={"order": order, "balance": customer_balance(request, customer_id)},
+            headers={"Cache-Control": "private, no-store"},
         )
 
     return application

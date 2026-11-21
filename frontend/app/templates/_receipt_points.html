@@ -1,0 +1,11 @@
+<div id="receipt-points" aria-live="polite"
+  {% if order.loyalty_status == 'pending' %}hx-get="/orders/{{ order.id }}/points" hx-trigger="every 15s" hx-swap="outerHTML"{% endif %}
+  class="points-earned {% if order.loyalty_status == 'pending' %}pending{% endif %}">
+      {% if order.loyalty_status == 'awarded' %}
+      <span>+{{ order.points_earned }} puntos</span>
+      <p>{% if balance is not none %}Tu nuevo saldo es de {{ balance }} puntos.{% else %}Tus puntos fueron acreditados. Saldo no disponible.{% endif %}</p>
+      {% else %}
+      <span>Puntos pendientes</span>
+      <p>El pedido quedó confirmado. Volveremos a intentar la acreditación y actualizaremos esta vista automáticamente.</p>
+      {% endif %}
+    </div>

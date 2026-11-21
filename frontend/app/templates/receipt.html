@@ -29,15 +29,7 @@
       <strong>{{ order.total_cents|money }}</strong>
     </div>
 
-    <div class="points-earned {% if order.loyalty_status == 'pending' %}pending{% endif %}">
-      {% if order.loyalty_status == 'awarded' %}
-      <span>+{{ order.points_earned }} puntos</span>
-      <p>{% if balance is not none %}Tu nuevo saldo es de {{ balance }} puntos.{% else %}Tus puntos fueron acreditados.{% endif %}</p>
-      {% else %}
-      <span>Puntos pendientes</span>
-      <p>El pedido quedó confirmado. Volveremos a intentar la acreditación.</p>
-      {% endif %}
-    </div>
+    {% include "_receipt_points.html" %}
 
     <div class="receipt-actions">
       <a class="button button-primary" href="/">Pedir algo más</a>

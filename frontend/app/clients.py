@@ -37,6 +37,10 @@ class BackendGateway(Protocol):
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> list[dict[str, Any]]: ...
 
+    def get_order(
+        self, *, order_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]: ...
+
     def get_balance(
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> dict[str, Any]: ...
@@ -138,6 +142,16 @@ class HttpBackendGateway:
         return self._request(
             "GET",
             f"{self._settings.loyalty_url}/api/v1/customers/{customer_id}/points",
+            request_id=request_id,
+            traceparent=traceparent,
+        )
+
+    def get_order(
+        self, *, order_id: str, request_id: str, traceparent: str
+    ) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            f"{self._settings.orders_url}/api/v1/orders/{order_id}",
             request_id=request_id,
             traceparent=traceparent,
         )

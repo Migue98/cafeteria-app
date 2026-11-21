@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import time
 from uuid import uuid4
@@ -334,6 +335,72 @@ def test_pending_loyalty_recovers_automatically(
         "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
     )
     assert balance.status == 200
+    assert balance.body["balance"] == 7
+
+
+def test_browser_history_survives_loyalty_outage_and_refreshes(
+    api: ApiClient, browser: BrowserSession, compose_command: list[str]
+) -> None:
+    browser.request("POST", f"{api.frontend_url}/cart/items/1")
+    browser.request("POST", f"{api.frontend_url}/cart/items/1")
+    subprocess.run(
+        [*compose_command, "stop", "svc-lealtad"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    try:
+        receipt = browser.request("POST", f"{api.frontend_url}/checkout")
+        assert receipt.status == 200
+        assert "Puntos pendientes" in receipt.body
+        assert 'hx-trigger="every 15s"' in receipt.body
+        order_id = re.search(r'data-order-id="([0-9a-f-]{36})"', receipt.body)[1]
+        history = browser.request("GET", f"{api.frontend_url}/orders")
+        assert history.status == 200
+        assert "Café americano" in history.body
+        assert "Saldo no disponible" in history.body
+        assert "Puntos pendientes" in history.body
+        assert 'hx-get="/orders"' in history.body
+    finally:
+        subprocess.run(
+            [*compose_command, "start", "svc-lealtad"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+
+    api.wait_until_healthy(timeout_seconds=90)
+    deadline = time.monotonic() + 20
+    while time.monotonic() < deadline:
+        refreshed = browser.request(
+            "GET",
+            f"{api.frontend_url}/orders/{order_id}/points",
+            headers={"HX-Request": "true"},
+        )
+        if "+7 puntos" in refreshed.body:
+            break
+        time.sleep(0.5)
+    assert refreshed.status == 200
+    assert "+7 puntos" in refreshed.body
+    assert 'hx-trigger="every 15s"' not in refreshed.body
+    history = browser.request(
+        "GET", f"{api.frontend_url}/orders", headers={"HX-Request": "true"}
+    )
+    assert "Puntos acreditados" in history.body
+    assert "Saldo no disponible" not in history.body
+    assert 'hx-trigger="every 15s"' not in history.body
+    assert "<!doctype" not in history.body
+
+    order = api.json("GET", f"{api.orders_url}/api/v1/orders/{order_id}").body
+    listed = api.json(
+        "GET",
+        f"{api.orders_url}/api/v1/orders",
+        query={"customer_id": order["customer_id"]},
+    )
+    balance = api.json(
+        "GET", f"{api.loyalty_url}/api/v1/customers/{order['customer_id']}/points"
+    )
+    assert listed.body["total"] == 1
     assert balance.body["balance"] == 7
 
 
