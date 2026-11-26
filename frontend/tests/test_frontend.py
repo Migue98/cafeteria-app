@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import Any
@@ -143,9 +144,27 @@ class FailingGateway(FakeGateway):
         raise BackendError("El menú no está disponible.")
 
 
-def make_client(gateway: FakeGateway | None = None) -> tuple[TestClient, FakeGateway]:
+class CSRFClient(TestClient):
+    """Cliente del flujo válido; los rechazos usan TestClient sin esta ayuda."""
+
+    csrf_token: str | None = None
+
+    def post(self, url, **kwargs):
+        if self.csrf_token is None:
+            page = self.get("/")
+            self.csrf_token = re.search(
+                r'name="csrf-token" content="([^"]+)"', page.text
+            )[1]
+        kwargs["headers"] = {
+            "X-CSRF-Token": self.csrf_token,
+            **kwargs.get("headers", {}),
+        }
+        return super().post(url, **kwargs)
+
+
+def make_client(gateway: FakeGateway | None = None) -> tuple[CSRFClient, FakeGateway]:
     gateway = gateway or FakeGateway()
-    return TestClient(create_app(gateway)), gateway
+    return CSRFClient(create_app(gateway)), gateway
 
 
 def test_home_renders_menu_balance_and_signed_session() -> None:
@@ -364,7 +383,9 @@ def test_duplicate_checkout_requests_use_the_same_prepared_key() -> None:
     def checkout_once(_):
         with TestClient(create_app(gateway)) as independent_client:
             independent_client.cookies.update(snapshot)
-            return independent_client.post("/checkout")
+            return independent_client.post(
+                "/checkout", headers={"X-CSRF-Token": owner.csrf_token}
+            )
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(checkout_once, range(2)))

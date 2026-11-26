@@ -46,4 +46,13 @@ raíz y abre <http://localhost:8000>.
 .\.venv\Scripts\ruff.exe format --check app tests
 ```
 
-`SESSION_SECRET` debe suministrarse mediante un Secret fuera del entorno local.
+Los formularios requieren un token generado y validado por
+`fastapi-csrf-protect==1.0.7`, con una cookie CSRF firmada y ligada a la sesión.
+Abrir primero `/`
+permite obtenerlo; no se deben enviar POST sin cookie ni token. HTMX se sirve
+localmente y la CSP bloquea scripts externos/inline.
+
+Producción requiere `APP_ENV=production`, origen HTTPS, hosts explícitos y un
+secreto de sesión aleatorio compartido por las réplicas. Las cookies son
+`Secure` y `HttpOnly`. Consulta la [guía de seguridad web](../docs/web-security.md)
+y la plantilla `compose.public.yaml` antes de publicar.

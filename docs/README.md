@@ -15,6 +15,7 @@
 | [Recuperación de puntos en la interfaz](frontend-loyalty-recovery.md) | Historial disponible durante fallas y actualización de puntos pendientes. |
 | [Concurrencia e idempotencia](concurrency-and-idempotency.md) | Compras simultáneas, claves alternas, garantías transaccionales y migración. |
 | [Fallas y recuperación](failure-recovery.md) | Caídas, timeouts, respuestas inválidas y recuperación sin duplicados. |
+| [Seguridad web](web-security.md) | CSRF, CSP, sesiones, hosts, HTMX local y requisitos de publicación. |
 | [Pruebas E2E](../tests/README.md) | Ejecución aislada, alcance y opciones de la suite integral. |
 | [Contratos OpenAPI](openapi/README.md) | APIs, convenciones y ejemplos ejecutables. |
 | [ADR-001](decisions/ADR-001-stack.md) | Elección del stack. |

@@ -255,14 +255,21 @@ def test_parallel_awards_with_different_amounts_preserve_first_movement(
 def test_duplicate_frontend_checkout_cookie_creates_only_one_purchase(
     api: ApiClient, browser: BrowserSession, loyalty_snapshot
 ):
-    # El carrito HTMX debe preparar también la sesión aunque no se haya abierto '/'.
+    # La sesión y el token se obtienen antes de enviar formularios protegidos.
     browser.request(
         "POST", f"{api.frontend_url}/cart/items/1", headers={"HX-Request": "true"}
     )
     url = f"{api.frontend_url}/checkout"
     cookie = browser.cookie_header(url)
     results = parallel_calls(
-        [lambda: api.text(url, method="POST", headers={"Cookie": cookie}, timeout=20)]
+        [
+            lambda: api.text(
+                url,
+                method="POST",
+                headers={"Cookie": cookie, "X-CSRF-Token": browser.csrf_token},
+                timeout=20,
+            )
+        ]
         * 4
     )
     assert all(result.status == 200 for result in results)

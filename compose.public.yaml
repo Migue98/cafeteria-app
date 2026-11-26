@@ -1,0 +1,21 @@
+# Plantilla para un proxy HTTPS en el mismo host; no inicia ni configura el proxy.
+# Docker Compose 2.24.4+ para !override; validar siempre la combinación con config.
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Configura una contraseña exclusiva para producción}
+  svc-menu:
+    ports: !reset []
+  svc-pedidos:
+    ports: !reset []
+  svc-lealtad:
+    ports: !reset []
+  frontend:
+    environment:
+      APP_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET:?Configura el secreto de sesión de producción}
+      SESSION_HTTPS_ONLY: "true"
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Configura el origen HTTPS público}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:?Configura los hosts permitidos y localhost para salud}
+    ports: !override
+      - "127.0.0.1:${FRONTEND_PORT:-8000}:8000"

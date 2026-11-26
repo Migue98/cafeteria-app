@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -12,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener, urlopen
 from uuid import UUID
 
@@ -126,6 +127,7 @@ class BrowserSession:
     def __init__(self) -> None:
         self._cookies = CookieJar()
         self._opener = build_opener(HTTPCookieProcessor(self._cookies))
+        self.csrf_token: str | None = None
 
     def cookie_header(self, url: str) -> str:
         request = Request(url)
@@ -135,17 +137,29 @@ class BrowserSession:
     def request(
         self, method: str, url: str, *, headers: dict[str, str] | None = None
     ) -> HttpResult:
-        data = b"" if method != "GET" else None
-        request = Request(url, data=data, method=method, headers=headers or {})
+        request_headers = dict(headers or {})
+        if method not in {"GET", "HEAD", "OPTIONS"}:
+            if self.csrf_token is None:
+                parsed = urlsplit(url)
+                self.request("GET", f"{parsed.scheme}://{parsed.netloc}/")
+            data = urlencode({"csrf_token": self.csrf_token or ""}).encode()
+            request_headers["Content-Type"] = "application/x-www-form-urlencoded"
+        else:
+            data = None
+        request = Request(url, data=data, method=method, headers=request_headers)
         try:
             response = self._opener.open(request, timeout=15)
         except HTTPError as exc:
             response = exc
         with response:
+            body = response.read().decode()
+            token = re.search(r'name="csrf-token" content="([^"]+)"', body)
+            if token:
+                self.csrf_token = token[1]
             return HttpResult(
                 response.status,
                 {key.lower(): value for key, value in response.headers.items()},
-                response.read().decode(),
+                body,
             )
 
 

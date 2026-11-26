@@ -21,7 +21,9 @@ La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro
 - métricas HTTP y de negocio;
 - persistencia después de reiniciar PostgreSQL;
 - fallas reales de menú, pedidos y PostgreSQL; timeouts de lectura al pausar
-  menú o lealtad; recuperación conservando carrito, pedidos y saldo.
+  menú o lealtad; recuperación conservando carrito, pedidos y saldo;
+- protección CSRF activa en formularios y HTMX, rechazo de otros orígenes y
+  hosts, CSP y carga de HTMX sin CDN.
 
 ## Ejecución
 
@@ -70,3 +72,15 @@ describe los casos y la migración de claves de lealtad.
 El workflow `Integrated E2E` ejecuta el mismo flujo Compose en pushes a `main` y
 Pull Requests que afecten a la aplicación. Las pruebas se mantienen en serie a
 nivel de escenario: no uses `pytest-xdist` sobre este proyecto compartido.
+
+## Seguridad web
+
+El cliente de navegador HTTP abre primero el menú, conserva la cookie de sesión
+y extrae el token CSRF que se incluye en los formularios. No se desactiva la
+protección para ejecutar pruebas. Las peticiones crudas de los casos negativos
+omiten o falsifican el token/origen deliberadamente.
+
+`frontend/tests/test_security.py` cubre también la configuración de producción,
+cookies `Secure`/`HttpOnly`, cabeceras en errores, aislamiento entre sesiones,
+límite de cuerpo y el hash del HTMX vendorizado. La suite E2E comprueba el flujo
+real con las mismas defensas. Consulta [Seguridad web](../docs/web-security.md).

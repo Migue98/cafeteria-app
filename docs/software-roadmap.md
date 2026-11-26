@@ -13,7 +13,7 @@ antes de integrarla al despliegue público.
 | 5 | Historial degradado y actualización de puntos en la interfaz | Integrado en `40d9bf6`. |
 | 6 | Concurrencia e idempotencia; suite E2E en CI | Integrado en `53b8814`; cinco workflows de GitHub aprobados. |
 | 7 | Fallas, timeouts y recuperación de dependencias | Implementado, validado localmente e integrado en `main`. |
-| 8 | Seguridad del software para publicación | Siguiente bloque. |
+| 8 | Seguridad del software para publicación | Implementado y validado localmente; pendiente de revisión/publicación. |
 | 9 | Validación final del software e integración con infraestructura | Después del bloque de seguridad. |
 
 El bloque 8 contempla protección CSRF de formularios, servir HTMX localmente,

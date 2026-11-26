@@ -61,6 +61,9 @@ Los detalles están en la [arquitectura](docs/architecture.md) y la
 - OpenAPI 3.1 es la fuente de verdad de los tres backends.
 - Las rutas de negocio usan `/api/v1`.
 - Todos los servicios exponen `GET /health` y `GET /metrics`.
+- El frontend protege los formularios con CSRF, sirve HTMX localmente y permite
+  configurar cookies y hosts para producción. Consulta la
+  [guía de seguridad web](docs/web-security.md) antes de exponer la aplicación.
 - Los cuatro servicios emiten logs JSON y propagan el contexto de la petición;
   consulta la [guía de logs y correlación](docs/application-observability.md).
 - Pedidos recupera automáticamente las acreditaciones pendientes cuando
@@ -162,6 +165,6 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Implementar la seguridad del software antes de coordinar su integración con
+Revisar el bloque de seguridad y coordinar la validación final del software con
 Kubernetes y GitOps. El orden y el estado de los bloques están
 en el [plan del software](docs/software-roadmap.md).

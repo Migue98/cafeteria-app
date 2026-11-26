@@ -89,6 +89,7 @@
             <form method="post" action="/cart/items/{{ product.id }}"
                   hx-post="/cart/items/{{ product.id }}"
                   hx-target="#cart-panel" hx-swap="outerHTML">
+              <input type="hidden" name="csrf_token" value="{{ request.session['csrf_token'] }}">
               <button class="button button-add" type="submit">Agregar al carrito</button>
             </form>
           </div>

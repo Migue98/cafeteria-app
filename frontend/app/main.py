@@ -6,6 +6,7 @@ import hashlib
 import json
 from contextlib import asynccontextmanager
 from datetime import datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,10 +18,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .clients import BackendError, BackendGateway, HttpBackendGateway
 from .config import Settings, load_settings
 from .observability import get_logger, install_observability
+from .security import CSRFMiddleware, SecurityHeadersMiddleware, security_headers
 
 LOGGER = get_logger("frontend")
 BASE_DIR = Path(__file__).resolve().parent
@@ -137,16 +140,29 @@ def create_app(
         version="0.1.0",
         description="Interfaz HTML para menú, carrito, pedidos y puntos.",
         lifespan=lifespan,
+        docs_url=None if settings.app_env == "production" else "/docs",
+        redoc_url=None if settings.app_env == "production" else "/redoc",
+        openapi_url=None if settings.app_env == "production" else "/openapi.json",
     )
     application.state.gateway = backend
     application.state.app_version = settings.app_version
+    application.add_middleware(CSRFMiddleware, settings=settings)
     application.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,
-        session_cookie="cafeteria_session",
-        max_age=60 * 60 * 24 * 30,
+        session_cookie=(
+            "__Host-cafeteria_session"
+            if settings.app_env == "production"
+            else "cafeteria_session"
+        ),
+        max_age=settings.session_max_age_seconds,
         same_site="lax",
         https_only=settings.session_https_only,
+    )
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=list(settings.allowed_hosts),
+        www_redirect=False,
     )
     application.mount(
         "/static", StaticFiles(directory=BASE_DIR / "static"), name="static"
@@ -154,6 +170,23 @@ def create_app(
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
     templates.env.filters["money"] = _money
     templates.env.filters["date_time"] = _date_time
+
+    @application.exception_handler(Exception)
+    async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            {
+                "title": "Error interno",
+                "status": 500,
+                "code": "INTERNAL_ERROR",
+                "detail": "No pudimos completar la solicitud. Intenta de nuevo.",
+                "trace_id": getattr(request.state, "trace_id", None),
+            },
+            status_code=500,
+            headers={
+                **security_headers(settings),
+                "Cache-Control": "private, no-store",
+            },
+        )
 
     def invalid_request_id(request: Request) -> JSONResponse:
         return JSONResponse(
@@ -174,6 +207,7 @@ def create_app(
         duration=HTTP_DURATION,
         invalid_response=invalid_request_id,
     )
+    application.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
     def customer_balance(request: Request, customer_id: str) -> int | None:
         try:
@@ -337,7 +371,7 @@ def create_app(
                     traceparent=request.state.traceparent,
                 )
             except BackendError as exc:
-                return HTMLResponse(str(exc), status_code=exc.status_code)
+                return HTMLResponse(escape(str(exc)), status_code=exc.status_code)
             return templates.TemplateResponse(
                 request=request,
                 name="_cart.html",
@@ -360,7 +394,7 @@ def create_app(
                     traceparent=request.state.traceparent,
                 )
             except BackendError as exc:
-                return HTMLResponse(str(exc), status_code=exc.status_code)
+                return HTMLResponse(escape(str(exc)), status_code=exc.status_code)
             return templates.TemplateResponse(
                 request=request,
                 name="_cart.html",
