@@ -18,6 +18,21 @@ class BackendError(RuntimeError):
         super().__init__(message)
 
 
+def _invalid_backend_response() -> BackendError:
+    return BackendError(
+        "Un servicio devolvió una respuesta inválida. Intenta de nuevo.",
+        status_code=502,
+        code="INVALID_BACKEND_RESPONSE",
+    )
+
+
+def _list_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    items = payload.get("items")
+    if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+        raise _invalid_backend_response()
+    return items
+
+
 class BackendGateway(Protocol):
     def list_products(
         self, *, request_id: str, traceparent: str
@@ -75,16 +90,18 @@ class HttpBackendGateway:
                 method, url, headers=request_headers, follow_redirects=False, **kwargs
             )
         except httpx.RequestError as exc:
-            raise BackendError(f"No fue posible contactar un servicio: {exc}") from exc
+            raise BackendError(
+                "Un servicio no está disponible temporalmente. Intenta de nuevo.",
+                code="DEPENDENCY_UNAVAILABLE",
+            ) from exc
 
         try:
             payload = response.json()
         except ValueError as exc:
-            raise BackendError(
-                "Un servicio devolvió una respuesta que no es JSON.",
-                status_code=502,
-                code="INVALID_BACKEND_RESPONSE",
-            ) from exc
+            raise _invalid_backend_response() from exc
+
+        if not isinstance(payload, dict):
+            raise _invalid_backend_response()
 
         if response.is_error:
             raise BackendError(
@@ -104,7 +121,7 @@ class HttpBackendGateway:
             traceparent=traceparent,
             params={"available": "true", "limit": 100},
         )
-        return payload["items"]
+        return _list_items(payload)
 
     def create_order(
         self,
@@ -134,17 +151,21 @@ class HttpBackendGateway:
             traceparent=traceparent,
             params={"customer_id": customer_id, "limit": 100},
         )
-        return payload["items"]
+        return _list_items(payload)
 
     def get_balance(
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> dict[str, Any]:
-        return self._request(
+        payload = self._request(
             "GET",
             f"{self._settings.loyalty_url}/api/v1/customers/{customer_id}/points",
             request_id=request_id,
             traceparent=traceparent,
         )
+        balance = payload.get("balance")
+        if type(balance) is not int or balance < 0:
+            raise _invalid_backend_response()
+        return payload
 
     def get_order(
         self, *, order_id: str, request_id: str, traceparent: str
@@ -171,7 +192,10 @@ class HttpBackendGateway:
                     request_id=request_id,
                     traceparent=traceparent,
                 )
-                dependencies[name] = payload["status"]
+                status = payload.get("status")
+                dependencies[name] = (
+                    status if status in ("healthy", "degraded") else "down"
+                )
             except BackendError:
                 dependencies[name] = "down"
         return dependencies

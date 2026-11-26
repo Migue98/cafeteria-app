@@ -19,7 +19,9 @@ La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro
   sin repetir pedidos ni acreditaciones;
 - errores de validación y conflictos;
 - métricas HTTP y de negocio;
-- persistencia después de reiniciar PostgreSQL.
+- persistencia después de reiniciar PostgreSQL;
+- fallas reales de menú, pedidos y PostgreSQL; timeouts de lectura al pausar
+  menú o lealtad; recuperación conservando carrito, pedidos y saldo.
 
 ## Ejecución
 

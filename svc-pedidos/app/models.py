@@ -102,9 +102,15 @@ class Problem(BaseModel):
 
 
 class MenuProduct(BaseModel):
-    id: int
+    id: int = Field(ge=1, strict=True)
     sku: str
     name: str
-    price_cents: int = Field(ge=0)
+    price_cents: int = Field(ge=0, strict=True)
     currency: Literal["MXN"]
-    available: bool
+    available: bool = Field(strict=True)
+
+
+class LoyaltyAward(BaseModel):
+    order_id: UUID
+    customer_id: UUID
+    points_earned: int = Field(ge=0, strict=True)

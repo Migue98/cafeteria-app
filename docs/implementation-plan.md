@@ -1,5 +1,8 @@
 # Plan de implementación
 
+Este es el plan general del proyecto y su infraestructura. El orden actual de
+desarrollo de la aplicación se mantiene en el [plan del software](software-roadmap.md).
+
 ## Fase 0 — Confirmaciones
 
 - Confirmar Proyecto 1 con el equipo o profesor.

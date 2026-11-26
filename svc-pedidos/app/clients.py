@@ -7,7 +7,7 @@ from typing import Protocol
 
 import httpx
 
-from .models import MenuProduct, Order
+from .models import LoyaltyAward, MenuProduct, Order
 
 
 class DependencyUnavailable(RuntimeError):
@@ -46,6 +46,13 @@ def _headers(request_id: str, traceparent: str) -> dict[str, str]:
     return {"X-Request-ID": request_id, "traceparent": traceparent}
 
 
+def _validate_health(response: httpx.Response) -> None:
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, dict) or payload.get("status") not in ("healthy", "degraded"):
+        raise ValueError("Respuesta de salud inválida")
+
+
 class HttpMenuClient:
     def __init__(self, base_url: str, timeout_seconds: float) -> None:
         self._base_url = base_url.rstrip("/")
@@ -59,8 +66,8 @@ class HttpMenuClient:
                 headers=_headers(request_id, traceparent),
                 timeout=self._timeout,
             )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+            _validate_health(response)
+        except (httpx.HTTPError, ValueError) as exc:
             raise DependencyUnavailable("svc-menu no está disponible") from exc
         return round((perf_counter() - started) * 1000, 3)
 
@@ -83,7 +90,13 @@ class HttpMenuClient:
             return None
         if response.status_code != 200:
             raise DependencyUnavailable("svc-menu rechazó la consulta del producto")
-        return MenuProduct.model_validate(response.json())
+        try:
+            product = MenuProduct.model_validate(response.json())
+            if product.id != product_id:
+                raise ValueError("El producto no coincide con la solicitud")
+            return product
+        except ValueError as exc:
+            raise DependencyUnavailable("svc-menu devolvió un producto inválido") from exc
 
 
 class HttpLoyaltyClient:
@@ -99,8 +112,8 @@ class HttpLoyaltyClient:
                 headers=_headers(request_id, traceparent),
                 timeout=self._timeout,
             )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
+            _validate_health(response)
+        except (httpx.HTTPError, ValueError) as exc:
             raise LoyaltyUnavailable("svc-lealtad no está disponible") from exc
         return round((perf_counter() - started) * 1000, 3)
 
@@ -130,4 +143,10 @@ class HttpLoyaltyClient:
             raise LoyaltyUnavailable("svc-lealtad no está disponible") from exc
         if response.status_code not in {200, 201}:
             raise LoyaltyUnavailable("svc-lealtad no pudo acreditar los puntos")
-        return int(response.json()["points_earned"])
+        try:
+            award = LoyaltyAward.model_validate(response.json())
+            if award.order_id != order.id or award.customer_id != order.customer_id:
+                raise ValueError("La acreditación no corresponde al pedido")
+            return award.points_earned
+        except ValueError as exc:
+            raise LoyaltyUnavailable("svc-lealtad devolvió una acreditación inválida") from exc

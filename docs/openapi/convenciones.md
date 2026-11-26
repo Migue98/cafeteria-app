@@ -85,6 +85,12 @@ Dependencias críticas:
 
 Lealtad es no crítica para confirmar un pedido: si falla, el pedido se guarda con `loyalty_status=pending`.
 
+Los timeouts y las respuestas inválidas de una dependencia siguen la misma
+clasificación: menú es crítico y rechaza la creación con 503; lealtad conserva
+el pedido confirmado y pendiente. Pedidos valida la identidad del producto y
+de la acreditación, además de sus importes/puntos, antes de utilizar la respuesta.
+Los escenarios están descritos en [Fallas y recuperación](../failure-recovery.md).
+
 ## Reglas de negocio fijadas
 
 - El precio válido es el devuelto por `svc-menu`, nunca el enviado por el navegador.

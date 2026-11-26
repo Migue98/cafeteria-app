@@ -5,6 +5,7 @@
 | [Arquitectura](architecture.md) | Componentes, flujo CI/CD y principios técnicos. |
 | [Especificación](application-specification.md) | Funciones, microservicios, persistencia y alcance. |
 | [Plan de implementación](implementation-plan.md) | Fases y orden de trabajo. |
+| [Plan del software](software-roadmap.md) | Bloques completados y orden pendiente antes de integrar infraestructura. |
 | [Inventario de dependencias](dependency-inventory.md) | Versiones declaradas e instaladas antes del bloqueo reproducible. |
 | [Validación de locks](dependency-lock-validation.md) | Evidencia de instalaciones limpias, pruebas y builds reproducibles. |
 | [Validación de entradas inmutables](immutable-input-validation.md) | Evidencia de imágenes, runtime y referencias externas fijadas. |
@@ -13,6 +14,7 @@
 | [Logs y correlación](application-observability.md) | Formato JSON común, propagación de contexto y guía para seguir una petición. |
 | [Recuperación de puntos en la interfaz](frontend-loyalty-recovery.md) | Historial disponible durante fallas y actualización de puntos pendientes. |
 | [Concurrencia e idempotencia](concurrency-and-idempotency.md) | Compras simultáneas, claves alternas, garantías transaccionales y migración. |
+| [Fallas y recuperación](failure-recovery.md) | Caídas, timeouts, respuestas inválidas y recuperación sin duplicados. |
 | [Pruebas E2E](../tests/README.md) | Ejecución aislada, alcance y opciones de la suite integral. |
 | [Contratos OpenAPI](openapi/README.md) | APIs, convenciones y ejemplos ejecutables. |
 | [ADR-001](decisions/ADR-001-stack.md) | Elección del stack. |

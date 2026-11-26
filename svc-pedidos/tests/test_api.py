@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
 
-from app.clients import DependencyUnavailable, LoyaltyUnavailable
+from app.clients import DependencyUnavailable, HttpLoyaltyClient, HttpMenuClient, LoyaltyUnavailable
 from app.loyalty_retry import retry_pending_loyalty
 from app.main import create_app
 from app.models import MenuProduct, Order
@@ -208,6 +210,90 @@ def test_loyalty_failure_keeps_confirmed_order_pending() -> None:
     assert response.json()["loyalty_status"] == "pending"
     assert response.json()["points_earned"] is None
     assert len(repository.orders) == 1
+
+
+@pytest.mark.parametrize("bad_points", [None, -1, "7", 7.5, True])
+def test_invalid_loyalty_response_keeps_order_pending(monkeypatch, bad_points) -> None:
+    def broken_award(*args, **kwargs):
+        payload = kwargs["json"]
+        return httpx.Response(
+            200,
+            json={
+                "order_id": payload["order_id"],
+                "customer_id": payload["customer_id"],
+                "points_earned": bad_points,
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", broken_award)
+    client, repository, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    response = create_order(client)
+    assert response.status_code == 201
+    assert response.json()["loyalty_status"] == "pending"
+    assert response.json()["points_earned"] is None
+    assert len(repository.orders) == 1
+
+
+def test_malformed_menu_response_returns_503_without_saving_order(monkeypatch) -> None:
+    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: httpx.Response(200, text="bad-json"))
+    client, repository, _ = make_client(menu=HttpMenuClient("http://menu", 1))
+    response = create_order(client)
+    assert response.status_code == 503
+    assert response.json()["code"] == "DEPENDENCY_UNAVAILABLE"
+    assert repository.orders == {}
+
+
+@pytest.mark.parametrize(
+    "field,value", [("id", 99), ("price_cents", "3500"), ("available", "true")]
+)
+def test_invalid_menu_product_is_not_used_to_create_order(monkeypatch, field, value):
+    product = FakeMenu().products[1].model_dump()
+    product[field] = value
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: httpx.Response(200, json=product))
+    client, repository, _ = make_client(menu=HttpMenuClient("http://menu", 1))
+    assert create_order(client).status_code == 503
+    assert repository.orders == {}
+
+
+@pytest.mark.parametrize("field", ["order_id", "customer_id"])
+def test_loyalty_award_for_another_identity_keeps_order_pending(monkeypatch, field):
+    def wrong_award(*args, **kwargs):
+        payload = kwargs["json"]
+        result = {
+            "order_id": payload["order_id"],
+            "customer_id": payload["customer_id"],
+            "points_earned": 7,
+        }
+        result[field] = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        return httpx.Response(200, json=result)
+
+    monkeypatch.setattr(httpx, "post", wrong_award)
+    client, repository, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    response = create_order(client)
+    assert response.status_code == 201
+    assert response.json()["loyalty_status"] == "pending"
+    assert len(repository.orders) == 1
+
+
+@pytest.mark.parametrize("points", [0, 7])
+def test_valid_integer_loyalty_response_is_accepted(monkeypatch, points):
+    def valid_award(*args, **kwargs):
+        payload = kwargs["json"]
+        return httpx.Response(
+            200,
+            json={
+                "order_id": payload["order_id"],
+                "customer_id": payload["customer_id"],
+                "points_earned": points,
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", valid_award)
+    client, _, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    response = create_order(client)
+    assert response.status_code == 201
+    assert response.json()["loyalty_status"] == "awarded"
+    assert response.json()["points_earned"] == points
 
 
 def test_same_idempotency_key_replays_without_duplicate() -> None:

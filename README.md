@@ -155,11 +155,13 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 - [Índice de documentación](docs/README.md)
 - [Plan de implementación](docs/implementation-plan.md)
+- [Plan del software](docs/software-roadmap.md)
 - [Integración local](docs/local-integration.md)
 - [ADR-001: stack inicial](docs/decisions/ADR-001-stack.md)
 - [ADR-002: contratos HTTP](docs/decisions/ADR-002-api-contracts.md)
 
 ## Siguiente hito
 
-Crear los manifiestos de Kubernetes y los overlays GitOps para desplegar los
-cuatro microservicios y PostgreSQL con probes, recursos y persistencia.
+Implementar la seguridad del software antes de coordinar su integración con
+Kubernetes y GitOps. El orden y el estado de los bloques están
+en el [plan del software](docs/software-roadmap.md).

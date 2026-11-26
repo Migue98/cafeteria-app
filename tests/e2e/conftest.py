@@ -137,7 +137,11 @@ class BrowserSession:
     ) -> HttpResult:
         data = b"" if method != "GET" else None
         request = Request(url, data=data, method=method, headers=headers or {})
-        with self._opener.open(request, timeout=10) as response:
+        try:
+            response = self._opener.open(request, timeout=15)
+        except HTTPError as exc:
+            response = exc
+        with response:
             return HttpResult(
                 response.status,
                 {key.lower(): value for key, value in response.headers.items()},
