@@ -13,8 +13,11 @@ antes de integrarla al despliegue público.
 | 5 | Historial degradado y actualización de puntos en la interfaz | Integrado en `40d9bf6`. |
 | 6 | Concurrencia e idempotencia; suite E2E en CI | Integrado en `53b8814`; cinco workflows de GitHub aprobados. |
 | 7 | Fallas, timeouts y recuperación de dependencias | Implementado, validado localmente e integrado en `main`. |
-| 8 | Seguridad del software para publicación | Implementado y validado localmente; pendiente de revisión/publicación. |
-| 9 | Validación final del software e integración con infraestructura | Después del bloque de seguridad. |
+| 8 | Seguridad del software para publicación | Implementado, validado e integrado en `204329a`; el despliegue público sigue pendiente. |
+| 9 | Organización de carpetas y documentación | Limpieza de esqueletos anteriores y separación de pruebas y comandos auxiliares en revisión local. |
+| 10 | Separación de rutas y lógica de negocio de `main.py` | Siguiente paso después de cerrar la organización. |
+| 11 | Validación final del software web | Después de la refactorización, conservando los flujos y las garantías existentes. |
+| 12 | Integración con infraestructura, Kubernetes y GitOps | Se retomará al terminar el desarrollo de la web. |
 
 El bloque 8 contempla protección CSRF de formularios, servir HTMX localmente,
 cabeceras de seguridad y configuración de sesión/cookies para producción.

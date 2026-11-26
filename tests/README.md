@@ -1,4 +1,32 @@
-# Pruebas integrales
+# Pruebas compartidas e integrales
+
+## Organización
+
+| Ubicación | Contenido |
+|---|---|
+| [`smoke/check_compose.py`](smoke/check_compose.py) | Comprobación rápida manual del Compose local ya levantado. |
+| [`e2e/`](e2e/) | Escenarios pytest de compra, concurrencia, fallas y seguridad sobre servicios reales. |
+| [`observability/`](observability/) | Contrato de logs y propagación de trazas, ejecutado con cada componente. |
+| `frontend/tests/` y `svc-*/tests/` | Pruebas específicas de cada componente, dentro de su carpeta. |
+
+Los comandos auxiliares viven en `scripts/`: el ejecutor `run_e2e.py` prepara
+el entorno y llama a pytest; `validate_contracts.py` revisa OpenAPI; y
+`compile_requirements.py` genera locks. Los escenarios de prueba permanecen
+en las carpetas `tests/`.
+
+## Comprobación rápida local
+
+Con el Compose normal ya levantado en los puertos `8000` a `8003`, desde la raíz:
+
+```powershell
+python tests/smoke/check_compose.py
+```
+
+Esta comprobación usa la biblioteca estándar de Python y crea un pedido con un
+cliente e identificador nuevos en la base local. No levanta ni limpia Compose.
+Se ejecuta explícitamente como script; los escenarios de pytest están en `e2e/`.
+
+## Suite E2E
 
 La suite E2E verifica el frontend, los tres servicios y PostgreSQL reales dentro de Compose. No usa dobles ni repositorios en memoria.
 

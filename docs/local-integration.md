@@ -15,6 +15,20 @@ La base compartida simplifica el desarrollo local, pero cada servicio conserva
 propiedad lógica sobre sus tablas. Los servicios se comunican mediante HTTP y
 no consultan directamente las tablas de otro servicio.
 
+El SQL se reparte por responsabilidad, con tres archivos independientes:
+
+| Archivo | Responsabilidad |
+|---|---|
+| [`svc-menu/db/init.sql`](../svc-menu/db/init.sql) | Catálogo y carga inicial de productos. |
+| [`svc-pedidos/db/init.sql`](../svc-pedidos/db/init.sql) | Pedidos, ítems e idempotencia de compras. |
+| [`svc-lealtad/db/init.sql`](../svc-lealtad/db/init.sql) | Saldos, movimientos y claves de acreditación. |
+
+El Compose raíz monta esos archivos como `001-menu.sql`, `002-orders.sql` y
+`003-loyalty.sql` en `/docker-entrypoint-initdb.d/`. Se ejecutan al inicializar
+un volumen vacío de PostgreSQL. Los Compose individuales montan únicamente el
+SQL de su servicio. Editar `init.sql` no actualiza automáticamente una base
+existente; los cambios de esquema necesitan una migración explícita.
+
 ## Iniciar
 
 Con Podman:
@@ -44,7 +58,7 @@ las dependencias. Las APIs quedan en:
 El smoke test usa únicamente la biblioteca estándar de Python:
 
 ```bash
-python scripts/smoke_compose.py
+python tests/smoke/check_compose.py
 ```
 
 La prueba verifica:

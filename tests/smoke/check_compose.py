@@ -1,4 +1,4 @@
-"""Prueba rápida del flujo menú -> pedido -> puntos en el Compose raíz."""
+"""Smoke test manual del flujo menú -> pedido -> puntos en el Compose raíz."""
 
 from __future__ import annotations
 

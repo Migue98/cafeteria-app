@@ -41,7 +41,7 @@ raíz y abre <http://localhost:8000>.
 ## Validación
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -p no:cacheprovider
+.\.venv\Scripts\python.exe -m pytest tests ../tests/observability -p no:cacheprovider
 .\.venv\Scripts\ruff.exe check app tests
 .\.venv\Scripts\ruff.exe format --check app tests
 ```

@@ -13,8 +13,8 @@ construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
 | Repositorio | Responsabilidad |
 |---|---|
-| [`cafeteria-app`](https://github.com/Migue98/cafeteria-app) | Código fuente, pruebas, Containerfiles, contratos OpenAPI y pipelines de Tekton. |
-| [`cafeteria-gitops`](https://github.com/Migue98/cafeteria-gitops) | Estado deseado de Kubernetes, overlays, Argo CD y observabilidad. |
+| [`cafeteria-app`](https://github.com/Migue98/cafeteria-app) | Código fuente, pruebas, Containerfiles y contratos OpenAPI. La carpeta de Tekton conserva la propuesta pendiente. |
+| [`cafeteria-gitops`](https://github.com/Migue98/cafeteria-gitops) | Diseño del estado deseado de Kubernetes, overlays, Argo CD y observabilidad; se retomará al terminar la web. |
 
 Tekton construirá imágenes inmutables identificadas por SHA y actualizará el
 repositorio GitOps. Argo CD será el único componente autorizado para aplicar el
@@ -80,25 +80,42 @@ Los archivos fuente, convenciones y ejemplos están en
 
 ```text
 .
-├── frontend/          # Interfaz web
-├── svc-menu/          # Catálogo y disponibilidad
-├── svc-pedidos/       # Pedidos y totales
-├── svc-lealtad/       # Puntos y movimientos
-├── compose.yaml       # Integración local de PostgreSQL y los tres backends
-├── tests/             # Pruebas integrales y de contratos
-├── tekton/            # Tasks, Pipeline y Triggers
-├── docs/              # Arquitectura, decisiones y OpenAPI
-└── scripts/           # Validaciones auxiliares
+├── frontend/          # Interfaz web: app/, templates, static y tests/
+├── svc-menu/          # Catálogo: app/, db/init.sql y tests/
+├── svc-pedidos/       # Pedidos: app/, db/init.sql y tests/
+├── svc-lealtad/       # Puntos: app/, db/init.sql y tests/
+├── tests/
+│   ├── smoke/         # Comprobación rápida del entorno local levantado
+│   ├── e2e/           # Escenarios integrales con Compose aislado
+│   └── observability/ # Contrato común de logs y correlación
+├── scripts/           # Ejecución E2E, validación OpenAPI y generación de locks
+├── .github/workflows/ # CI del frontend, backends y pruebas E2E
+├── tekton/            # Documentación del pipeline previsto; sin recursos todavía
+├── docs/              # Arquitectura, decisiones, OpenAPI y guías operativas
+├── compose.yaml       # Frontend, tres backends y PostgreSQL para desarrollo local
+└── compose.public.yaml # Ajustes para proxy HTTPS; no configura ni inicia el proxy
 ```
 
 Cada backend contiene su aplicación, pruebas, dependencias, `Containerfile`,
 `.dockerignore`, Compose individual y documentación operativa.
 
+Las pruebas de cada componente viven en su propio `tests/`. Las que abarcan
+varios componentes viven en el `tests/` de la raíz. `scripts/` contiene los
+comandos auxiliares: `run_e2e.py` prepara Compose y llama a pytest,
+`validate_contracts.py` valida los contratos de `docs/openapi/` y
+`compile_requirements.py` regenera los locks de dependencias.
+
+Cada backend conserva su SQL de inicialización en `db/init.sql`. El Compose
+raíz monta los tres archivos en una única instancia y base de PostgreSQL:
+menú administra productos; pedidos, pedidos e ítems; lealtad, saldos,
+movimientos y claves de acreditación. Consulta la
+[integración local](docs/local-integration.md).
+
 ## Integración local
 
 ```bash
 podman compose up --build --detach
-python scripts/smoke_compose.py
+python tests/smoke/check_compose.py
 podman compose down
 ```
 
@@ -120,7 +137,7 @@ python scripts/validate_contracts.py
 
 El comando debe finalizar con `Contratos válidos: 3`.
 
-Para recorrer los tres servicios y PostgreSQL de extremo a extremo en un
+Para recorrer el frontend, los tres backends y PostgreSQL de extremo a extremo en un
 Compose aislado:
 
 ```bash
@@ -132,7 +149,7 @@ La suite cubre compra, precios, puntos, idempotencia, errores, métricas y
 persistencia tras reiniciar PostgreSQL. Los detalles están en
 [`tests/README.md`](tests/README.md).
 
-Para validar el servicio implementado:
+Para validar un backend, por ejemplo menú:
 
 ```bash
 cd svc-menu
@@ -165,6 +182,8 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Revisar el bloque de seguridad y coordinar la validación final del software con
-Kubernetes y GitOps. El orden y el estado de los bloques están
-en el [plan del software](docs/software-roadmap.md).
+Terminar de ordenar las carpetas y documentación; después separar rutas y
+lógica de negocio de los `main.py` más grandes y validar la web completa.
+Kubernetes, Tekton y GitOps se retomarán al cerrar el desarrollo del software.
+El orden y el estado de los bloques están en el
+[plan del software](docs/software-roadmap.md).
