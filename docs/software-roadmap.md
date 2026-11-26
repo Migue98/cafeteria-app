@@ -14,8 +14,8 @@ antes de integrarla al despliegue público.
 | 6 | Concurrencia e idempotencia; suite E2E en CI | Integrado en `53b8814`; cinco workflows de GitHub aprobados. |
 | 7 | Fallas, timeouts y recuperación de dependencias | Implementado, validado localmente e integrado en `main`. |
 | 8 | Seguridad del software para publicación | Implementado, validado e integrado en `204329a`; el despliegue público sigue pendiente. |
-| 9 | Organización de carpetas y documentación | Limpieza de esqueletos anteriores y separación de pruebas y comandos auxiliares en revisión local. |
-| 10 | Separación de rutas y lógica de negocio de `main.py` | Siguiente paso después de cerrar la organización. |
+| 9 | Organización de carpetas y documentación | Integrado en `ff37cd4`; los esqueletos antiguos de la materia se retiraron en `1361737`. |
+| 10 | Separación de rutas y lógica de negocio de `main.py` | Implementado y validado localmente en frontend y pedidos; pendiente de revisión. |
 | 11 | Validación final del software web | Después de la refactorización, conservando los flujos y las garantías existentes. |
 | 12 | Integración con infraestructura, Kubernetes y GitOps | Se retomará al terminar el desarrollo de la web. |
 

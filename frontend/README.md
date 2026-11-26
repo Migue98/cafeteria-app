@@ -21,6 +21,15 @@ no repiten la compra ni ejecutan la acreditación. Consulta la
 Los formularios funcionan con navegación HTML normal. HTMX mejora las
 operaciones del carrito sin convertir la aplicación en una SPA.
 
+## Organización del código
+
+`app/main.py` construye la aplicación y conecta seguridad, recursos y rutas.
+`app/routes/` agrupa las URLs por menú, carrito, pedidos y operación;
+`app/services/` contiene las reglas del carrito y la coordinación con los
+backends. `app/presentation.py` concentra Jinja y las respuestas HTML;
+`app/dependencies.py` resuelve los clientes y plantillas con `Depends` de
+FastAPI. Consulta la [guía de organización](../docs/code-organization.md).
+
 El carrito prepara la clave idempotente antes de confirmar. Dos envíos con la
 misma cookie reutilizan esa clave; una compra posterior obtiene otra. Las
 [pruebas de concurrencia](../docs/concurrency-and-idempotency.md) verifican que

@@ -6,6 +6,16 @@ persistir pedidos y coordinar la acreditación de puntos. PostgreSQL y
 
 Contrato: [`svc-pedidos.openapi.json`](../docs/openapi/svc-pedidos.openapi.json).
 
+## Organización del código
+
+`app/main.py` configura FastAPI, los recursos y el ciclo de vida del worker.
+`app/routes/` recibe las solicitudes HTTP; `app/services/` contiene los casos
+de uso y las comprobaciones de salud. `app/dependencies.py` conecta los recursos
+de cada instancia con `Depends`. Los errores de negocio están en
+`app/exceptions.py` y su representación HTTP en `app/error_handlers.py`.
+El SQL permanece en `app/repository.py` y `db/init.sql`. Consulta la
+[guía de organización](../docs/code-organization.md).
+
 ## Endpoints
 
 | Método | Ruta | Descripción |

@@ -3,6 +3,7 @@
 | Documento | Contenido |
 |---|---|
 | [Arquitectura](architecture.md) | Componentes, flujo CI/CD y principios técnicos. |
+| [Organización del código](code-organization.md) | Configuración, rutas, servicios, dependencias, errores y persistencia del frontend y pedidos. |
 | [Especificación](application-specification.md) | Funciones, microservicios, persistencia y alcance. |
 | [Plan de implementación](implementation-plan.md) | Fases y orden de trabajo. |
 | [Plan del software](software-roadmap.md) | Bloques completados y orden pendiente antes de integrar infraestructura. |

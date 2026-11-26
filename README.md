@@ -80,9 +80,9 @@ Los archivos fuente, convenciones y ejemplos están en
 
 ```text
 .
-├── frontend/          # Interfaz web: app/, templates, static y tests/
+├── frontend/          # Interfaz web: app/routes, services, templates y static; tests/
 ├── svc-menu/          # Catálogo: app/, db/init.sql y tests/
-├── svc-pedidos/       # Pedidos: app/, db/init.sql y tests/
+├── svc-pedidos/       # Pedidos: app/routes y services, db/init.sql y tests/
 ├── svc-lealtad/       # Puntos: app/, db/init.sql y tests/
 ├── tests/
 │   ├── smoke/         # Comprobación rápida del entorno local levantado
@@ -98,6 +98,10 @@ Los archivos fuente, convenciones y ejemplos están en
 
 Cada backend contiene su aplicación, pruebas, dependencias, `Containerfile`,
 `.dockerignore`, Compose individual y documentación operativa.
+
+El frontend y pedidos separan `main.py` (configuración), `routes/` (HTTP) y
+`services/` (operaciones). La [organización del código](docs/code-organization.md)
+describe las dependencias, presentación, errores, métricas y persistencia.
 
 Las pruebas de cada componente viven en su propio `tests/`. Las que abarcan
 varios componentes viven en el `tests/` de la raíz. `scripts/` contiene los
@@ -182,8 +186,8 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Terminar de ordenar las carpetas y documentación; después separar rutas y
-lógica de negocio de los `main.py` más grandes y validar la web completa.
+Revisar la separación de configuración, rutas y servicios y cerrar la
+validación final de la web completa.
 Kubernetes, Tekton y GitOps se retomarán al cerrar el desarrollo del software.
 El orden y el estado de los bloques están en el
 [plan del software](docs/software-roadmap.md).
