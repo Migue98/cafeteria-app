@@ -13,6 +13,7 @@ from .error_handlers import install_error_handlers, invalid_request_id
 from .loyalty_retry import loyalty_retry_loop
 from .metrics import HTTP_DURATION, HTTP_REQUESTS
 from .observability import Telemetry, create_telemetry, get_logger, install_observability
+from .probes import ProbeChecks, install_probes
 from .repository import OrderRepository, PostgresOrderRepository
 from .routes import router
 
@@ -25,6 +26,7 @@ def create_app(
     loyalty_client: LoyaltyClient | None = None,
     *,
     telemetry: Telemetry | None = None,
+    readiness_checks: ProbeChecks | None = None,
 ) -> FastAPI:
     settings = load_settings()
     telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
@@ -85,6 +87,13 @@ def create_app(
     )
     install_error_handlers(application)
     application.include_router(router)
+    install_probes(
+        application,
+        "svc-pedidos",
+        checks=readiness_checks,
+        database_url=settings.database_url,
+        menu_url=settings.menu_url,
+    )
     return application
 
 

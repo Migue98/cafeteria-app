@@ -1,3 +1,6 @@
+-- Solo esquema; no crea saldos ni movimientos de ejemplo.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS loyalty_accounts (
     customer_id UUID PRIMARY KEY,
     balance INTEGER NOT NULL DEFAULT 0 CHECK (balance >= 0),
@@ -27,7 +30,4 @@ CREATE TABLE IF NOT EXISTS loyalty_request_keys (
     movement_id UUID NOT NULL REFERENCES loyalty_movements(movement_id)
 );
 
--- Migración idempotente para movimientos creados antes de registrar claves alternas.
-INSERT INTO loyalty_request_keys (idempotency_key, movement_id)
-SELECT idempotency_key, movement_id FROM loyalty_movements
-ON CONFLICT (idempotency_key) DO NOTHING;
+COMMIT;

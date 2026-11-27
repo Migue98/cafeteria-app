@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "docs" / "openapi"
 
@@ -46,7 +45,9 @@ def validate(path: Path) -> list[str]:
 
     operation_ids: set[str] = set()
     for route, path_item in document.get("paths", {}).items():
-        if route not in {"/health", "/metrics"} and not route.startswith("/api/v1/"):
+        if route not in {"/health", "/metrics", "/livez", "/readyz"} and not route.startswith(
+            "/api/v1/"
+        ):
             errors.append(f"{path.name}: ruta sin versión: {route}")
         for method, operation in path_item.items():
             if method not in {"get", "post", "put", "patch", "delete"}:

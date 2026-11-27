@@ -1,9 +1,12 @@
 # Servicio de lealtad
 
 Las claves de idempotencia, incluidas las utilizadas para repetir un movimiento,
-se reservan en `loyalty_request_keys`. Si tienes un volumen con datos existentes,
-aplica el script idempotente antes de iniciar la nueva versión; consulta la
+se reservan en `loyalty_request_keys`. Si tu base antigua de desarrollo tiene
+movimientos sin claves reservadas, aplica el backfill manual; consulta la
 [migración y las garantías de concurrencia](../docs/concurrency-and-idempotency.md).
+
+`db/init.sql` crea solo el esquema. `db/backfill-request-keys.sql` conserva la
+reparación de claves históricas como operación explícita fuera del arranque.
 
 Microservicio FastAPI responsable del libro de movimientos y del saldo de
 puntos por cliente. Una falla temporal de este servicio nunca elimina ni
@@ -40,6 +43,8 @@ loyalty_accounts 1 ───── N loyalty_movements
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Comprueba la conexión con PostgreSQL. |
+| `GET` | `/livez` | Comprueba el proceso sin consultar dependencias. |
+| `GET` | `/readyz` | 200 con PostgreSQL disponible; 503 si falla. |
 | `GET` | `/metrics` | Métricas HTTP y de puntos para Prometheus. |
 | `POST` | `/api/v1/points/earn` | Acredita puntos de forma idempotente. |
 | `GET` | `/api/v1/customers/{customer_id}/points` | Consulta el saldo; clientes nuevos obtienen cero. |

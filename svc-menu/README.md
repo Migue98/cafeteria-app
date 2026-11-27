@@ -2,7 +2,9 @@
 
 Microservicio FastAPI responsable del catálogo, precios y disponibilidad. Usa
 PostgreSQL como fuente de verdad y carga 20 productos de ejemplo de forma
-idempotente al crear la base local.
+idempotente al crear la base local. `db/init.sql` crea únicamente el esquema;
+`db/seed.sql` agrega los ejemplos sin sobrescribir productos existentes.
+Consulta la [inicialización de BD](../docs/database-initialization.md).
 
 Contrato: [`svc-menu.openapi.json`](../docs/openapi/svc-menu.openapi.json).
 
@@ -11,6 +13,8 @@ Contrato: [`svc-menu.openapi.json`](../docs/openapi/svc-menu.openapi.json).
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Comprueba el servicio y la conexión con PostgreSQL. |
+| `GET` | `/livez` | Comprueba el proceso sin consultar dependencias. |
+| `GET` | `/readyz` | 200 con PostgreSQL disponible; 503 si falla. |
 | `GET` | `/metrics` | Métricas para Prometheus. |
 | `GET` | `/api/v1/products` | Lista y filtra productos con paginación. |
 | `GET` | `/api/v1/products/{product_id}` | Obtiene un producto por ID. |

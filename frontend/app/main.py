@@ -16,6 +16,7 @@ from .error_handlers import install_error_handlers, invalid_request_id
 from .metrics import HTTP_DURATION, HTTP_REQUESTS
 from .observability import Telemetry, create_telemetry, get_logger, install_observability
 from .presentation import create_templates
+from .probes import ProbeChecks, install_probes
 from .routes import router
 from .security import CSRFMiddleware, SecurityHeadersMiddleware
 
@@ -28,6 +29,7 @@ def create_app(
     settings: Settings | None = None,
     *,
     telemetry: Telemetry | None = None,
+    readiness_checks: ProbeChecks | None = None,
 ) -> FastAPI:
     settings = settings or load_settings()
     telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
@@ -80,6 +82,7 @@ def create_app(
     )
     application.add_middleware(SecurityHeadersMiddleware, settings=settings)
     application.include_router(router)
+    install_probes(application, "frontend", checks=readiness_checks, menu_url=settings.menu_url)
     return application
 
 

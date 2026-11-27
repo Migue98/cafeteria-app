@@ -30,6 +30,10 @@ para las capturas y los recorridos en cinco anchos.
 
 ## Organización del código
 
+`GET /livez` comprueba el proceso y `GET /readyz` depende únicamente de menú;
+`GET /health` conserva el diagnóstico de los tres backends. Consulta el
+[contrato de salud](../docs/health-contract.md) para respuestas y límites.
+
 `app/main.py` construye la aplicación y conecta seguridad, recursos y rutas.
 `app/routes/` agrupa las URLs por menú, carrito, pedidos y operación;
 `app/services/` contiene las reglas del carrito y la coordinación con los

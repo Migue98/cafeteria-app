@@ -1,13 +1,14 @@
 # Contrato de salud para Kubernetes
 
-Fecha: **27 de noviembre de 2026**. Paso 1 de preparación del software para
-GitOps: **contrato definido; endpoints nuevos pendientes de implementar**.
-Este documento fija el comportamiento del paso 2. No cambia todavía código,
-Compose, manifiestos ni los tres contratos OpenAPI ejecutables existentes.
+Fecha: **27 de noviembre de 2026**. Pasos 1 y 2 de preparación del software para
+GitOps: **contrato definido y probes implementadas en los cuatro componentes**.
+Los tres contratos OpenAPI incluyen las rutas. La validación descrita es local;
+los healthchecks de Compose siguen usando `/health` y los
+manifiestos de infraestructura quedan para el paso 4.
 
 ## Tres preguntas diferentes
 
-| Endpoint | Pregunta | Comportamiento objetivo |
+| Endpoint | Pregunta | Comportamiento |
 |---|---|---|
 | `GET /livez` | ¿Responde el proceso de esta réplica? | HTTP 200 si terminó la inicialización local y el servidor puede responder. No consulta red, BD, disco externo ni exportadores. |
 | `GET /readyz` | ¿Puede esta réplica atender su función principal? | HTTP 200 si las dependencias críticas pasan; HTTP 503 si alguna falla o vence el presupuesto de comprobación. |
@@ -38,7 +39,7 @@ lealtad. Así una comprobación opcional lenta no consume su presupuesto ni
 bloquea capacidad de servicio que sí existe. Los detalles de degradación siguen
 disponibles en `/health` y en las operaciones de negocio.
 
-El frontend y pedidos consultarán `/readyz` de menú con timeout y validación
+El frontend y pedidos consultan `/readyz` de menú con timeout y validación
 del código y cuerpo del contrato. Menú solo comprueba su BD: no se crean ciclos
 de comprobaciones. Cada backend comprueba su propia conexión a PostgreSQL.
 
@@ -93,12 +94,17 @@ pod. El Ingress público mantendrá estas rutas operativas fuera de exposición.
 
 ## Tiempos y recuperación
 
-Presupuesto objetivo a implementar para `/readyz`: **tres segundos en total**,
-incluyendo conexiones y consulta, sin reintentos internos. Configurar límites
-de conexión y sentencia en PostgreSQL y de red en HTTP; no basta con el
-`connect_timeout=3` actual, que no limita una sentencia bloqueada. El límite
-global debe producir `not_ready` dentro de ese presupuesto y evitar acumulación
-de trabajo pendiente después del timeout. Comprobarlo en el paso 2.
+Presupuesto de `/readyz`: **tres segundos en total**, incluyendo conexiones y
+consulta, sin reintentos internos. Las comprobaciones críticas corren en
+paralelo mediante `asyncio.TaskGroup`; el timeout cancela y espera su cierre.
+Psycopg usa una conexión asíncrona propia con límites de conexión y sentencia
+de un segundo; HTTPX limita a un segundo las operaciones de red y no sigue
+redirecciones. La respuesta de menú debe cumplir su contrato JSON.
+
+Cada proceso admite una sola comprobación de readiness en curso. Una solicitud
+simultánea devuelve 503 con sus checks en `down` sin encolar más trabajo.
+Liveness permanece independiente. Las pruebas cubren cancelación, concurrencia
+y recuperación, además de PostgreSQL realmente detenido o pausado en Compose.
 
 Valores iniciales para diseñar los manifiestos del paso 4, sujetos a medición:
 
@@ -114,7 +120,7 @@ exitosa permite recuperar Ready sin reiniciar el proceso ni volver a desplegar.
 Una probe prueba esta réplica y sus dependencias; no garantiza disponibilidad
 total de la aplicación ni sustituye las pruebas de compra.
 
-## Matriz de aceptación para implementar
+## Matriz de aceptación
 
 Supuesto de la matriz: procesos iniciados y configuración local válida.
 
@@ -132,8 +138,8 @@ Supuesto de la matriz: procesos iniciados y configuración local válida.
 Durante caída de lealtad, además se debe confirmar un pedido, verificar estado
 pending y comprobar acreditación única al recuperarse. Durante caída de pedidos,
 verificar catálogo/carrito y mensaje de checkout; readiness 200 del frontend no
-afirma que toda operación esté disponible. Son criterios de pruebas del paso 2,
-no resultados obtenidos al escribir este contrato.
+afirma que toda operación esté disponible. Las suites de recuperación y navegador
+comprueban estos comportamientos de negocio junto con las nuevas probes.
 
 ## Compatibilidad y siguiente paso
 
@@ -143,12 +149,41 @@ actual. Los healthchecks de Compose y las llamadas entre servicios actuales
 siguen usando esa ruta hasta una transición explícita. No se sustituye por una
 redirección ni se renombra ningún campo de respuesta existente.
 
-**Paso 2:** incorporar `/livez` y `/readyz` a los OpenAPI de los tres backends
-antes del código, documentar el frontend con el mismo contrato, ampliar la
-lista de rutas operativas admitidas por el validador y después implementar y
-probar los cuatro componentes. Los manifiestos Kubernetes y los cambios de
-Compose se revisan en su paso correspondiente. Esta definición no requiere
-acceso al clúster ni cambios en infraestructura.
+La implementación está en `app/probes.py` de cada componente, conectada desde
+`create_app`. Cada imagen conserva un módulo autónomo; una prueba compartida
+comprueba que las cuatro copias sean equivalentes. FastAPI/Pydantic declaran
+las respuestas, HTTPX consulta menú y Psycopg comprueba PostgreSQL, usando las
+dependencias ya fijadas del proyecto.
+
+El **paso 3 ajustado** prepara la [inicialización de BD](database-initialization.md):
+separa esquema y ejemplos y comprueba persistencia, sin migración de producción.
+Los manifiestos Kubernetes se revisan en el paso 4; estas pruebas no constituyen
+validación dentro del clúster.
+
+## Validación local del paso 2
+
+Ejecución del 27 de noviembre de 2026, con las imágenes reconstruidas en el
+proyecto aislado `cafeteria-e2e` y datos desechables:
+
+| Comprobación | Resultado |
+|---|---|
+| Frontend + pruebas compartidas | 109 aprobadas. |
+| Menú + pruebas compartidas | 48 aprobadas. |
+| Pedidos + pruebas compartidas | 71 aprobadas. |
+| Lealtad + pruebas compartidas | 51 aprobadas. |
+| E2E HTTP, incluyendo las seis pruebas nuevas de probes | 37 aprobadas en 194.66 s. |
+| Chromium: compra, carrito, historial, recuperación y seguridad | 12 aprobadas en 84.65 s. |
+| Ruff y formato en los cuatro componentes; contratos OpenAPI | Aprobados. |
+
+Las 279 pruebas de componentes incluyen 65 casos nuevos de probes. La suite
+HTTP verifica caídas de menú, pedidos y lealtad, además de PostgreSQL detenido
+y pausado. Comprueba los códigos, el presupuesto de respuesta y que los procesos
+sobrevivientes conserven su hora de inicio; después exige recuperación a 200.
+El runner retiró contenedores, red y volumen de ensayo al terminar.
+
+Permanecen avisos de deprecación de las dependencias de TestClient/Playwright;
+no hay pruebas fallidas. No se ejecutaron probes de Kubernetes ni se cambió
+el stack habitual de desarrollo. Este resultado corresponde al código local.
 
 Fuente de semántica Kubernetes: [liveness, readiness y startup](https://kubernetes.io/docs/concepts/workloads/pods/probes/).
 Las decisiones de dependencias y respuestas de este documento pertenecen a

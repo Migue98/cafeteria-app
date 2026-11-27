@@ -87,7 +87,7 @@ Los archivos fuente, convenciones y ejemplos están en
 ```text
 .
 ├── frontend/          # Interfaz web: app/routes, services, templates y static; tests/
-├── svc-menu/          # Catálogo: app/, db/init.sql y tests/
+├── svc-menu/          # Catálogo: app/, db/init.sql, db/seed.sql y tests/
 ├── svc-pedidos/       # Pedidos: app/routes y services, db/init.sql y tests/
 ├── svc-lealtad/       # Puntos: app/, db/init.sql y tests/
 ├── tests/
@@ -121,11 +121,13 @@ comandos auxiliares: `run_e2e.py` prepara Compose y llama a pytest,
 `validate_contracts.py` valida los contratos de `docs/openapi/` y
 `compile_requirements.py` regenera los locks de dependencias.
 
-Cada backend conserva su SQL de inicialización en `db/init.sql`. El Compose
-raíz monta los tres archivos en una única instancia y base de PostgreSQL:
+Cada backend conserva su esquema en `db/init.sql`; menú separa los productos
+de ejemplo en `db/seed.sql`. El Compose raíz monta los cuatro archivos, en ese
+orden, para inicializar una única instancia y base de PostgreSQL vacía:
 menú administra productos; pedidos, pedidos e ítems; lealtad, saldos,
 movimientos y claves de acreditación. Consulta la
-[integración local](docs/local-integration.md).
+[integración local](docs/local-integration.md) y la
+[inicialización de BD](docs/database-initialization.md).
 
 ## Integración local
 

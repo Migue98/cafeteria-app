@@ -21,6 +21,8 @@ El SQL permanece en `app/repository.py` y `db/init.sql`. Consulta la
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/health` | Salud de PostgreSQL, menú y lealtad. |
+| `GET` | `/livez` | Comprueba el proceso sin consultar dependencias. |
+| `GET` | `/readyz` | Requiere PostgreSQL y menú; lealtad no bloquea readiness. |
 | `GET` | `/metrics` | Métricas Prometheus HTTP y de negocio. |
 | `POST` | `/api/v1/orders` | Crea un pedido de forma idempotente. |
 | `GET` | `/api/v1/orders` | Lista pedidos de un cliente. |

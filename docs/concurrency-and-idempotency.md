@@ -44,24 +44,34 @@ datos mientras se espera a otro servicio.
 
 ## Base de datos existente
 
-En una base nueva, el script de inicialización crea la tabla y carga sus claves.
+En una base nueva, el script de inicialización crea la tabla vacía; las nuevas
+acreditaciones reservan sus claves dentro de la transacción de negocio.
 En una base con volumen persistente, **reiniciar el contenedor no vuelve a ejecutar
-los scripts de inicialización**. Antes de levantar la nueva versión de lealtad,
-ejecuta el script idempotente desde la raíz del repositorio:
+los scripts de inicialización**. Solo si faltan claves históricas, antes de
+levantar la nueva versión de lealtad, actualiza los montajes de PostgreSQL y
+aplica los dos archivos desde la raíz del repositorio:
 
 ```powershell
+docker compose up --detach --no-deps postgres
+# Esperar a que PostgreSQL esté healthy; se conserva su volumen.
 docker compose exec -T postgres psql -U cafeteria -d cafeteria -v ON_ERROR_STOP=1 -f /docker-entrypoint-initdb.d/003-loyalty.sql
+docker compose exec -T postgres psql -U cafeteria -d cafeteria -v ON_ERROR_STOP=1 -f /opt/cafeteria/db/backfill-loyalty-request-keys.sql
 ```
 
-Adapta usuario y base si configuraste otros valores. El archivo se monta desde
-`svc-lealtad/db/init.sql`; el comando crea las estructuras que falten y asocia las
-claves iniciales de movimientos históricos. No elimina pedidos, movimientos ni
+Adapta usuario y base si configuraste otros valores. Los archivos se montan desde
+`svc-lealtad/db/init.sql` y `svc-lealtad/db/backfill-request-keys.sql`. El primer
+comando crea las estructuras que falten y el segundo asocia las claves iniciales
+de movimientos históricos. No elimina pedidos, movimientos ni
 volúmenes. Las claves alternas que nunca se guardaron antes de esta versión no
 pueden reconstruirse; quedan reservadas al volver a utilizarlas válidamente.
 
-La migración se prueba simulando un movimiento histórico sin asociación,
+El backfill manual se prueba simulando un movimiento histórico sin asociación,
 ejecutando el script dos veces y comprobando que la repetición conserva el mismo
 movimiento y saldo.
+
+Este procedimiento conserva compatibilidad con bases antiguas de desarrollo;
+no hay una migración nueva de producción. El backfill está fuera del directorio
+de ejecución automática. Ver [inicialización de PostgreSQL](database-initialization.md).
 
 ## Escenarios cubiertos
 

@@ -25,6 +25,7 @@ from .models import (
     Problem,
 )
 from .observability import Telemetry, create_telemetry, get_logger, install_observability
+from .probes import ProbeChecks, install_probes
 from .repository import (
     LoyaltyRepository,
     PostgresLoyaltyRepository,
@@ -122,7 +123,10 @@ RepositoryDependency = Annotated[LoyaltyRepository, Depends(get_repository)]
 
 
 def create_app(
-    repository: LoyaltyRepository | None = None, *, telemetry: Telemetry | None = None
+    repository: LoyaltyRepository | None = None,
+    *,
+    telemetry: Telemetry | None = None,
+    readiness_checks: ProbeChecks | None = None,
 ) -> FastAPI:
     settings = load_settings()
     telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
@@ -291,6 +295,9 @@ def create_app(
     ) -> PointsBalance:
         return repository.get_balance(customer_id)
 
+    install_probes(
+        application, "svc-lealtad", checks=readiness_checks, database_url=settings.database_url
+    )
     return application
 
 

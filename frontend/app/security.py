@@ -50,7 +50,11 @@ class SecurityHeadersMiddleware:
                 headers = MutableHeaders(scope=message)
                 headers.update(self.headers)
                 if not scope["path"].startswith("/static/"):
-                    headers["Cache-Control"] = "private, no-store"
+                    headers["Cache-Control"] = (
+                        "no-store"
+                        if scope["path"] in {"/livez", "/readyz"}
+                        else "private, no-store"
+                    )
             await send(message)
 
         await self.app(scope, receive, send_headers)

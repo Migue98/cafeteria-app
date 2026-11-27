@@ -18,10 +18,10 @@ python scripts/validate_contracts.py
 
 ## Regla de trabajo
 
-El [contrato de salud para Kubernetes](../health-contract.md) fija el diseño del
-paso 1 para los cuatro componentes. Los endpoints `/livez` y `/readyz` aún no
-están implementados ni añadidos a estos JSON; el paso 2 actualizará primero
-OpenAPI y su validador antes de implementar las rutas. `/health` sigue vigente.
+El [contrato de salud para Kubernetes](../health-contract.md) define las probes
+implementadas en los cuatro componentes. `/livez` y `/readyz` están incluidos
+en los tres JSON y su validador; las pruebas comprueban su correspondencia con
+OpenAPI generado y su comportamiento ante fallas. `/health` sigue vigente.
 
 1. Cambiar primero el contrato.
 2. Añadir o ajustar pruebas de contrato.

@@ -21,18 +21,20 @@ Cada servicio tendrá su propio Containerfile, imagen de Docker Hub, Deployment 
 
 ## Contrato operativo común
 
-Todos los backends expondrán:
+Los cuatro componentes exponen:
 
 ```text
 GET /health   # diagnóstico actual de dependencias
+GET /livez    # proceso disponible; sin consultar dependencias
+GET /readyz   # dependencias críticas: 200 listo, 503 no listo
 GET /metrics  # formato Prometheus
 ```
 
 También tendrán logs JSON en stdout con `timestamp`, `level`, `service`, `message`, `trace_id` y `span_id`. Los errores HTTP no incluirán trazas internas ni credenciales.
 
-La adaptación a Kubernetes separará `GET /livez` y `GET /readyz`, manteniendo
-`/health`. El [contrato de salud](health-contract.md) define el diseño para los
-cuatro componentes; su implementación corresponde al paso 2 de preparación.
+La adaptación a Kubernetes separa `GET /livez` y `GET /readyz`, manteniendo
+`/health`. El [contrato de salud](health-contract.md) documenta dependencias,
+respuestas y validación del paso 2. Los manifiestos del clúster siguen pendientes.
 
 Cuando `svc-lealtad` no esté disponible, `svc-pedidos` conservará el pedido con
 `loyalty_status=pending`. Un trabajador ejecutará un lote al iniciar y cada 15

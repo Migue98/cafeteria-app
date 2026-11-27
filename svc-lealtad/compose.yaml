@@ -13,6 +13,7 @@ services:
     volumes:
       - loyalty-postgres-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/003-loyalty.sql:ro
+      - ./db/backfill-request-keys.sql:/opt/cafeteria/db/backfill-loyalty-request-keys.sql:ro
 
   svc-lealtad:
     build:

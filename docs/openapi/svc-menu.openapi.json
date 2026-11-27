@@ -14,6 +14,110 @@
     {"name": "productos"}
   ],
   "paths": {
+    "/livez": {
+      "get": {
+        "tags": [
+          "operación"
+        ],
+        "operationId": "menuLiveness",
+        "summary": "Comprueba el proceso sin dependencias",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Proceso disponible",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": [
+          "operación"
+        ],
+        "operationId": "menuReadiness",
+        "summary": "Comprueba exclusivamente dependencias críticas, con presupuesto global de tres segundos",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Traceparent"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dependencias críticas disponibles",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependencia crítica no disponible o timeout",
+            "headers": {
+              "X-Request-ID": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "traceparent": {
+                "$ref": "#/components/headers/Traceparent"
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["operación"],
@@ -162,6 +266,65 @@
       }
     },
     "schemas": {
+      "LivenessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "status"
+        ],
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "svc-menu"
+          },
+          "status": {
+            "type": "string",
+            "const": "alive"
+          }
+        }
+      },
+      "ReadinessChecks": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "postgres"
+        ],
+        "properties": {
+          "postgres": {
+            "type": "string",
+            "enum": [
+              "up",
+              "down"
+            ]
+          }
+        }
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "service",
+          "status",
+          "checks"
+        ],
+        "properties": {
+          "service": {
+            "type": "string",
+            "const": "svc-menu"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "not_ready"
+            ]
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ReadinessChecks"
+          }
+        }
+      },
       "Product": {
         "type": "object",
         "additionalProperties": false,

@@ -25,6 +25,8 @@ services:
       - ./svc-menu/db/init.sql:/docker-entrypoint-initdb.d/001-menu.sql:ro
       - ./svc-pedidos/db/init.sql:/docker-entrypoint-initdb.d/002-orders.sql:ro
       - ./svc-lealtad/db/init.sql:/docker-entrypoint-initdb.d/003-loyalty.sql:ro
+      - ./svc-menu/db/seed.sql:/docker-entrypoint-initdb.d/004-menu-seed.sql:ro
+      - ./svc-lealtad/db/backfill-request-keys.sql:/opt/cafeteria/db/backfill-loyalty-request-keys.sql:ro
 
   svc-menu:
     build:

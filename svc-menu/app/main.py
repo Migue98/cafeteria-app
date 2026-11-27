@@ -21,6 +21,7 @@ from .models import (
     ProductList,
 )
 from .observability import Telemetry, create_telemetry, get_logger, install_observability, log_event
+from .probes import ProbeChecks, install_probes
 from .repository import (
     PostgresProductRepository,
     ProductRepository,
@@ -76,7 +77,10 @@ RepositoryDependency = Annotated[ProductRepository, Depends(get_repository)]
 
 
 def create_app(
-    repository: ProductRepository | None = None, *, telemetry: Telemetry | None = None
+    repository: ProductRepository | None = None,
+    *,
+    telemetry: Telemetry | None = None,
+    readiness_checks: ProbeChecks | None = None,
 ) -> FastAPI:
     settings = load_settings()
     telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
@@ -209,6 +213,9 @@ def create_app(
             )
         return product
 
+    install_probes(
+        application, "svc-menu", checks=readiness_checks, database_url=settings.database_url
+    )
     return application
 
 

@@ -1,3 +1,6 @@
+-- Solo esquema; no crea clientes ni pedidos de ejemplo.
+BEGIN;
+
 CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY,
     customer_id UUID NOT NULL,
@@ -32,3 +35,5 @@ CREATE TABLE IF NOT EXISTS order_items (
     PRIMARY KEY (order_id, position),
     UNIQUE (order_id, product_id)
 );
+
+COMMIT;

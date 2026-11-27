@@ -58,10 +58,10 @@ jobs:
       - name: Install Chromium and system dependencies
         run: python -m playwright install --with-deps chromium
 
-      - name: Check browser tests, outage recovery and shared helpers
+      - name: Check integrated tests and shared helpers
         run: |
-          python -m ruff check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_failure_recovery.py scripts/run_e2e.py
-          python -m ruff format --check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_failure_recovery.py scripts/run_e2e.py
+          python -m ruff check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_concurrency.py tests/e2e/test_failure_recovery.py tests/e2e/test_probes.py tests/e2e/test_database_initialization.py scripts/run_e2e.py
+          python -m ruff format --check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_concurrency.py tests/e2e/test_failure_recovery.py tests/e2e/test_probes.py tests/e2e/test_database_initialization.py scripts/run_e2e.py
 
       - name: Validate public Compose template
         env:

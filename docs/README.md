@@ -10,13 +10,14 @@
 | [Revisión visual y de usabilidad](visual-usability-review.md) | Escritorio y móvil, navegación, teclado, carga, errores y evidencia de las correcciones. |
 | [Plan de CI/CD con Tekton](tekton-ci-cd.md) | Pipeline por etapas, pruebas, publicación, webhook y contrato con GitOps. |
 | [Especificación](application-specification.md) | Funciones, microservicios, persistencia y alcance. |
-| [Contrato de salud](health-contract.md) | Diseño de /livez y /readyz, dependencias críticas, compatibilidad con /health y aceptación; implementación pendiente. |
+| [Contrato de salud](health-contract.md) | Probes /livez y /readyz implementadas, dependencias críticas, compatibilidad con /health y evidencia de validación. |
 | [Plan de trabajo actualizado](implementation-plan.md) | Ocho pasos, clases 2–4, responsables por frente y aceptación de Tekton, Argo CD, datos y observabilidad. |
 | [Plan del software](software-roadmap.md) | Bloques completados y orden pendiente antes de integrar infraestructura. |
 | [Inventario de dependencias](dependency-inventory.md) | Versiones declaradas e instaladas antes del bloqueo reproducible. |
 | [Validación de locks](dependency-lock-validation.md) | Evidencia de instalaciones limpias, pruebas y builds reproducibles. |
 | [Validación de entradas inmutables](immutable-input-validation.md) | Evidencia de imágenes, runtime y referencias externas fijadas. |
 | [Integración local](local-integration.md) | Compose del frontend y backends, SQL por servicio y comprobación rápida. |
+| [Inicialización de PostgreSQL](database-initialization.md) | Esquema separado de ejemplos, arranque con volumen vacío, persistencia y compatibilidad de bases de desarrollo. |
 | [Reintento automático de lealtad](automatic-loyalty-retry.md) | Recuperación, idempotencia, configuración y métricas. |
 | [Logs y correlación](application-observability.md) | Formato JSON común, propagación de contexto y guía para seguir una petición. |
 | [Instrumentación OpenTelemetry](opentelemetry-tracing.md) | Spans de FastAPI, HTTPX y PostgreSQL, exportación OTLP y pruebas de correlación. |

@@ -65,7 +65,7 @@ Los cambios de infraestructura se coordinarán y aprobarán con su responsable.
 ## 2–3. CI dentro de Tekton
 
 Primero clonar y validar manualmente; después ampliar a integración y builds.
-Los comandos de pytest, Ruff y contratos ya existen y se reutilizan. Las 31
+Los comandos de pytest, Ruff y contratos ya existen y se reutilizan. Las 40
 pruebas HTTP y 12 de Chromium son la referencia funcional actual.
 
 El runner actual controla Docker Compose. Instalar solamente la CLI en una Task
@@ -93,18 +93,21 @@ una combinación incompleta. Ver [plan de Tekton](tekton-ci-cd.md).
 
 Antes de fijar las probes de los manifiestos, seguir el
 [contrato de salud](health-contract.md), definido como paso 1 de preparación
-del software. El paso 2 implementará `/livez` y `/readyz`; el diagnóstico
-`/health` conserva su contrato actual. La definición ya está documentada y
-las nuevas rutas aún no están implementadas.
+del software. El paso 2 ya implementa `/livez` y `/readyz` en los cuatro
+componentes y los contratos OpenAPI; el diagnóstico `/health` conserva su
+contrato actual. Las pruebas locales verifican fallas y recuperación.
 
 En `cafeteria-gitops`: `base/`, `overlays/production/`, `apps/` y `monitoring/`.
 Frontend y pedidos tendrán al menos dos réplicas; todos los contenedores,
-requests/limits. Verificar la semántica de `/health` antes de elegir las probes:
+requests/limits. Usar `/livez` para liveness/startup y `/readyz` para readiness:
 una dependencia caída no debe producir reinicios en cascada por liveness.
 
-PostgreSQL usa StatefulSet y `volumeClaimTemplates`; inicialización idempotente
-con los tres SQL y mínimo 20 productos, más una estrategia explícita para cambios
-de esquema en bases existentes. El workspace de CI y los datos de tienda usan
+PostgreSQL usará StatefulSet y `volumeClaimTemplates`. La
+[inicialización del software](database-initialization.md) separa los tres
+esquemas de la carga de 20 productos de demostración; los archivos se aplican
+solo al almacenamiento vacío. No se requiere una migración de producción ahora;
+los futuros cambios de esquema necesitarán una actualización explícita para
+bases existentes. El workspace de CI y los datos de tienda usan
 volúmenes diferentes. No versionar datos de usuarios ni Secrets reales.
 
 Tekton actualiza juntas las cuatro imágenes del overlay, con SHA y digest,

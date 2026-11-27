@@ -81,9 +81,9 @@ Esta secuencia es distinta de los ocho pasos de integración del plan general.
 
 | Paso | Trabajo | Estado |
 |---|---|---|
-| 1 | Definir el contrato de salud. | Definido en [health-contract.md](health-contract.md): dependencias, respuestas, tiempos y aceptación. Rutas nuevas pendientes de implementar. |
-| 2 | Implementar las probes y actualizar OpenAPI/pruebas. | Pendiente. |
-| 3 | Ordenar inicialización y migraciones de BD. | Pendiente. |
+| 1 | Definir el contrato de salud. | Definido en [health-contract.md](health-contract.md): dependencias, respuestas, tiempos y aceptación. |
+| 2 | Implementar las probes y actualizar OpenAPI/pruebas. | Implementado y validado localmente en los cuatro componentes. Ver evidencia en [health-contract.md](health-contract.md). Configuración en Kubernetes pendiente en el paso 4. |
+| 3 | Preparar la inicialización de BD: separar esquema/ejemplos y comprobar persistencia. | Implementado y validado localmente: 40 pruebas HTTP y 12 de Chromium aprobadas. Ver [database-initialization.md](database-initialization.md). Sin migración de producción; integración con Kubernetes pendiente. |
 | 4 | Crear los manifiestos GitOps. | Pendiente. |
 | 5 | Preparar las pruebas para Tekton. | Pendiente. |
 | 6 | Conectar Tekton, GitOps y Argo CD. | Pendiente. |

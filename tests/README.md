@@ -88,7 +88,7 @@ y finalmente elimina sus contenedores, red y volumen. No toca el Compose local
 normal. Ejecuta los comandos siguientes con el Python de `tests/.venv` activo:
 
 ```powershell
-# Recorrido completo: 31 casos HTTP y 12 casos de navegador.
+# Recorrido completo: 40 casos HTTP y 12 casos de navegador.
 python scripts/run_e2e.py
 # Ejecutar solo una de las suites con el mismo aislamiento y limpieza.
 python scripts/run_e2e.py --suite http
@@ -157,7 +157,16 @@ casos de consultas y visualización de los dashboards. La
 [guía de monitoreo](../docs/local-monitoring.md) detalla puertos y evidencias.
 
 La suite de monitoreo se selecciona explícitamente mediante su runner;
-`run_e2e.py` mantiene las 31 pruebas HTTP y doce de navegador de la app.
+`run_e2e.py` ejecuta las 40 pruebas HTTP y doce de navegador de la app.
+Los seis casos de `tests/e2e/test_probes.py` incluyen disponibilidad inicial,
+caída de cada backend y PostgreSQL detenido/pausado; verifican recuperación y
+que los procesos sobrevivientes no se reinicien. Los tests compartidos de
+`tests/observability/test_probes.py` cubren contratos, timeouts y concurrencia
+en los cuatro componentes. Ver [contrato de salud](../docs/health-contract.md).
+Los tres casos de `tests/e2e/test_database_initialization.py` comprueban esquema
+sin ejemplos, repetición sin sobrescribir datos ni retroceder IDs y recreación
+del stack conservando catálogo, pedidos, puntos e idempotencia. Ver
+[inicialización de BD](../docs/database-initialization.md).
 El workflow `Local monitoring` ejecuta las nuevas pruebas por separado.
 
 ```powershell

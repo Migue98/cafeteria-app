@@ -73,7 +73,9 @@ Invoke-RestMethod http://localhost:8000/health
 
 Espera a que los cinco servicios aparezcan como `healthy`. La primera ejecución
 descarga las imágenes y construye los cuatro componentes. PostgreSQL ejecuta
-los tres `db/init.sql` solo sobre un volumen vacío; no hay que importarlos a mano.
+los tres esquemas `db/init.sql` y después `svc-menu/db/seed.sql` solo sobre un
+volumen vacío; no hay que importarlos a mano. El seed no sobrescribe productos.
+Consulta la [inicialización de BD](database-initialization.md) para bases existentes.
 
 | Componente | URL del host | Uso |
 |---|---|---|
