@@ -6,6 +6,8 @@ from time import perf_counter
 from typing import Protocol
 
 import psycopg
+from opentelemetry.instrumentation.psycopg import PsycopgInstrumentor
+from opentelemetry.trace import TracerProvider
 from psycopg.rows import dict_row
 
 from .models import Product
@@ -31,15 +33,19 @@ class ProductRepository(Protocol):
 
 
 class PostgresProductRepository:
-    def __init__(self, database_url: str) -> None:
+    def __init__(self, database_url: str, *, tracer_provider: TracerProvider | None = None) -> None:
         self._database_url = database_url
+        self._tracer_provider = tracer_provider
 
     def _connect(self) -> psycopg.Connection:
         try:
-            return psycopg.connect(
+            connection = psycopg.connect(
                 self._database_url,
                 connect_timeout=3,
                 row_factory=dict_row,
+            )
+            return PsycopgInstrumentor().instrument_connection(
+                connection, tracer_provider=self._tracer_provider
             )
         except (psycopg.Error, OSError) as exc:
             raise RepositoryUnavailable("PostgreSQL no está disponible") from exc

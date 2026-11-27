@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: cafeteria-local
+    orgId: 1
+    folder: Cafetería local
+    folderUid: cafeteria-local
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/dashboards

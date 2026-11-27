@@ -7,7 +7,7 @@ from fastapi.responses import RedirectResponse, Response
 from ..clients import BackendError
 from ..dependencies import StorefrontDependency, TemplatesDependency
 from ..exceptions import ProductUnavailable
-from ..presentation import render_cart, render_error
+from ..presentation import render_cart, render_cart_error
 from ..services.cart import decrement_item, remove_item
 
 router = APIRouter()
@@ -28,16 +28,19 @@ def add_to_cart(
             traceparent=request.state.traceparent,
         )
     except ProductUnavailable as exc:
-        return render_error(
+        return render_cart_error(
             request,
             templates,
             BackendError(str(exc), status_code=404, code="PRODUCT_UNAVAILABLE"),
+            product_id=product_id,
         )
     except BackendError as exc:
-        return render_error(request, templates, exc)
+        return render_cart_error(request, templates, exc, product_id=product_id)
     if request.headers.get("HX-Request") == "true":
         return templates.TemplateResponse(
-            request=request, name="_cart.html", context=context
+            request=request,
+            name="_cart_response.html",
+            context={**context, "changed_product_id": product_id},
         )
     return RedirectResponse(url="/#cart-panel", status_code=303)
 

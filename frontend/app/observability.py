@@ -1,11 +1,12 @@
-"""Contexto de trazas y logs JSON; contrato común de los cuatro servicios."""
+"""Métricas y logs correlacionados con trazas reales de OpenTelemetry."""
 
 from __future__ import annotations
 
 import json
 import logging
-import re
+import os
 import sys
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from time import perf_counter
@@ -13,28 +14,88 @@ from traceback import format_exc
 from uuid import UUID, uuid4
 
 from fastapi import FastAPI, Request
+from opentelemetry import propagate, trace
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.metrics import NoOpMeterProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 from prometheus_client import Counter, Histogram
-
-TRACEPARENT = re.compile(r"^00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})$")
 
 
 @dataclass(frozen=True, slots=True)
 class TraceContext:
+    """Vista del span del SDK para respuestas y logs, sin generar identificadores."""
+
     trace_id: str
     span_id: str
     parent_span_id: str | None = None
     flags: str = "01"
 
     @classmethod
-    def from_header(cls, incoming: str = "") -> TraceContext:
-        match = TRACEPARENT.fullmatch(incoming)
-        if match and int(match[1], 16) and int(match[2], 16):
-            return cls(match[1], uuid4().hex[:16], match[2], match[3])
-        return cls(uuid4().hex, uuid4().hex[:16])
+    def from_span(cls, span: trace.Span, *, parent_span_id: str | None = None) -> TraceContext:
+        context = span.get_span_context()
+        parent = getattr(span, "parent", None)
+        if parent is not None and parent.is_valid:
+            parent_span_id = trace.format_span_id(parent.span_id)
+        return cls(
+            trace.format_trace_id(context.trace_id),
+            trace.format_span_id(context.span_id),
+            parent_span_id,
+            f"{int(context.trace_flags):02x}",
+        )
+
+    @classmethod
+    def current(cls) -> TraceContext | None:
+        span = trace.get_current_span()
+        return cls.from_span(span) if span.get_span_context().is_valid else None
 
     @property
     def traceparent(self) -> str:
         return f"00-{self.trace_id}-{self.span_id}-{self.flags}"
+
+
+@dataclass(frozen=True, slots=True)
+class Telemetry:
+    """Un proveedor por aplicación; no modifica proveedores globales del proceso."""
+
+    provider: TracerProvider
+
+    @property
+    def tracer(self) -> trace.Tracer:
+        return self.provider.get_tracer("cafeteria")
+
+    def shutdown(self) -> None:
+        self.provider.shutdown()
+
+
+def create_telemetry(service: str, version: str = "dev") -> Telemetry:
+    configured_exporters = os.getenv("OTEL_TRACES_EXPORTER", "none").strip() or "none"
+    exporters = {item.strip() for item in configured_exporters.split(",")}
+    if not exporters <= {"none", "console", "otlp"} or ("none" in exporters and len(exporters) > 1):
+        raise ValueError("OTEL_TRACES_EXPORTER debe ser none, console, otlp o console,otlp")
+    if "otlp" in exporters:
+        protocol = os.getenv(
+            "OTEL_EXPORTER_OTLP_TRACES_PROTOCOL",
+            os.getenv("OTEL_EXPORTER_OTLP_PROTOCOL", "http/protobuf"),
+        )
+        if protocol != "http/protobuf":
+            raise ValueError("El exportador instalado usa OTLP http/protobuf")
+    provider = TracerProvider(
+        resource=Resource.create({"service.name": service, "service.version": version})
+    )
+    if "console" in exporters:
+        provider.add_span_processor(
+            BatchSpanProcessor(
+                ConsoleSpanExporter(
+                    out=sys.stdout, formatter=lambda span: span.to_json(indent=None) + "\n"
+                )
+            )
+        )
+    if "otlp" in exporters:
+        provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter()))
+    return Telemetry(provider)
 
 
 def get_logger(service: str) -> logging.Logger:
@@ -60,6 +121,7 @@ def log_event(
     request_id: str | None = None,
     **fields: object,
 ) -> None:
+    context = context or TraceContext.current()
     logger.log(
         level,
         json.dumps(
@@ -86,11 +148,34 @@ def install_observability(
     requests: Counter,
     duration: Histogram,
     invalid_response,
+    telemetry: Telemetry | None = None,
 ) -> None:
+    telemetry = telemetry or create_telemetry(logger.name)
+    application.state.telemetry = telemetry
+    original_lifespan = application.router.lifespan_context
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        try:
+            async with original_lifespan(app) as state:
+                yield state
+        finally:
+            telemetry.shutdown()
+
+    application.router.lifespan_context = lifespan
+
     @application.middleware("http")
     async def request_context(request: Request, call_next):
         started = perf_counter()
-        context = TraceContext.from_header(request.headers.get("traceparent", ""))
+        remote_parent = trace.get_current_span(
+            propagate.extract(request.headers)
+        ).get_span_context()
+        context = TraceContext.from_span(
+            trace.get_current_span(),
+            parent_span_id=trace.format_span_id(remote_parent.span_id)
+            if remote_parent.is_valid
+            else None,
+        )
         request.state.trace_context = context
         request.state.trace_id = context.trace_id
         request.state.traceparent = context.traceparent
@@ -104,11 +189,7 @@ def install_observability(
 
         status_code = 500
         try:
-            response = (
-                await call_next(request)
-                if valid_request_id
-                else invalid_response(request)
-            )
+            response = await call_next(request) if valid_request_id else invalid_response(request)
             status_code = response.status_code
             response.headers["X-Request-ID"] = request.state.request_id
             response.headers["traceparent"] = context.traceparent
@@ -132,9 +213,9 @@ def install_observability(
                 route=route,
                 status_code=str(status_code),
             ).inc()
-            duration.labels(
-                service=logger.name, method=request.method, route=route
-            ).observe(elapsed)
+            duration.labels(service=logger.name, method=request.method, route=route).observe(
+                elapsed
+            )
             level = (
                 logging.ERROR
                 if status_code >= 500
@@ -154,3 +235,10 @@ def install_observability(
                 status_code=status_code,
                 duration_ms=round(elapsed * 1000, 3),
             )
+
+    FastAPIInstrumentor.instrument_app(
+        application,
+        tracer_provider=telemetry.provider,
+        meter_provider=NoOpMeterProvider(),
+        exclude_spans=["receive", "send"],
+    )

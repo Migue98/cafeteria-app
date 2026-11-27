@@ -36,12 +36,9 @@ class Settings:
         if self.session_max_age_seconds <= 0:
             raise ValueError("SESSION_MAX_AGE_SECONDS debe ser mayor que cero")
         if not self.allowed_hosts or any(
-            not host or "*" in host or "/" in host or " " in host
-            for host in self.allowed_hosts
+            not host or "*" in host or "/" in host or " " in host for host in self.allowed_hosts
         ):
-            raise ValueError(
-                "ALLOWED_HOSTS debe contener hosts explícitos, sin comodines"
-            )
+            raise ValueError("ALLOWED_HOSTS debe contener hosts explícitos, sin comodines")
         if self.public_origin:
             parsed = urlsplit(self.public_origin)
             origin_port = parsed.port  # También rechaza puertos inválidos al iniciar.
@@ -55,15 +52,11 @@ class Settings:
                 or parsed.query
                 or parsed.fragment
             ):
-                raise ValueError(
-                    "PUBLIC_ORIGIN debe ser un origen sin ruta ni credenciales"
-                )
+                raise ValueError("PUBLIC_ORIGIN debe ser un origen sin ruta ni credenciales")
             if parsed.hostname not in self.allowed_hosts:
                 raise ValueError("El host de PUBLIC_ORIGIN debe estar en ALLOWED_HOSTS")
         if self.app_env == "production":
-            if len(self.session_secret) < 32 or self.session_secret.startswith(
-                "local-development"
-            ):
+            if len(self.session_secret) < 32 or self.session_secret.startswith("local-development"):
                 raise ValueError(
                     "Producción requiere SESSION_SECRET aleatorio de al menos 32 caracteres"
                 )
@@ -86,17 +79,15 @@ def load_settings() -> Settings:
             "SESSION_SECRET", "local-development-only-change-before-deploying"
         ),
         session_https_only=_as_bool(
-            os.getenv(
-                "SESSION_HTTPS_ONLY", "true" if app_env == "production" else "false"
-            )
+            os.getenv("SESSION_HTTPS_ONLY", "true" if app_env == "production" else "false")
         ),
         app_version=os.getenv("APP_VERSION", "dev"),
         app_env=app_env,
         allowed_hosts=tuple(
             host.strip().lower()
-            for host in os.getenv(
-                "ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver"
-            ).split(",")
+            for host in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,[::1],testserver").split(
+                ","
+            )
         ),
         public_origin=os.getenv("PUBLIC_ORIGIN", "").rstrip("/"),
         session_max_age_seconds=int(os.getenv("SESSION_MAX_AGE_SECONDS", "86400")),

@@ -1,0 +1,75 @@
+# Extensión local opcional: docker compose -f compose.yaml -f compose.monitoring.yaml up -d
+services:
+  frontend:
+    environment:
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,[::1]},frontend
+
+  prometheus:
+    image: docker.io/prom/prometheus:v3.16.0@sha256:e04987641b57704f408e31f6373ba4138ecf27cb4a165d24aabb6c38fddd0f06
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - cafeteria-prometheus-data:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      frontend:
+        condition: service_healthy
+      svc-menu:
+        condition: service_healthy
+      svc-pedidos:
+        condition: service_healthy
+      svc-lealtad:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:9090/-/ready]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+
+  grafana:
+    image: docker.io/grafana/grafana:13.3.2@sha256:81556409ba48b2b922e0adb69a2511337d8ba7578f11962eefa6149a2d815101
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-local-grafana-change-me}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:${GRAFANA_PORT:-3000}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/connection.json
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_UNIFIED_ALERTING_MIN_INTERVAL: 10s
+      ALERT_SERVICE_DOWN_FOR: ${ALERT_SERVICE_DOWN_FOR:-30s}
+      ALERT_HTTP_ERRORS_FOR: ${ALERT_HTTP_ERRORS_FOR:-30s}
+      ALERT_LOYALTY_PENDING_FOR: ${ALERT_LOYALTY_PENDING_FOR:-20m}
+    volumes:
+      - cafeteria-grafana-data:/var/lib/grafana
+      - ./observability/grafana/provisioning/datasources/prometheus.yaml:/etc/grafana/provisioning/datasources/prometheus.yaml:ro
+      - ./observability/grafana/provisioning/dashboards/local.yaml:/etc/grafana/provisioning/dashboards/local.yaml:ro
+      - ./observability/grafana/dashboards:/etc/grafana/dashboards:ro
+      - ./observability/grafana/alerting/rules.yaml:/etc/grafana/provisioning/alerting/rules.yaml:ro
+      - ./observability/grafana/alerting/local-routing.yaml:/etc/grafana/provisioning/alerting/routing.yaml:ro
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:3000/api/health]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+    mem_limit: 512m
+
+volumes:
+  cafeteria-prometheus-data:
+  cafeteria-grafana-data:

@@ -12,7 +12,7 @@ from .config import load_settings
 from .error_handlers import install_error_handlers, invalid_request_id
 from .loyalty_retry import loyalty_retry_loop
 from .metrics import HTTP_DURATION, HTTP_REQUESTS
-from .observability import get_logger, install_observability
+from .observability import Telemetry, create_telemetry, get_logger, install_observability
 from .repository import OrderRepository, PostgresOrderRepository
 from .routes import router
 
@@ -23,14 +23,19 @@ def create_app(
     repository: OrderRepository | None = None,
     menu_client: MenuClient | None = None,
     loyalty_client: LoyaltyClient | None = None,
+    *,
+    telemetry: Telemetry | None = None,
 ) -> FastAPI:
     settings = load_settings()
-    configured_repository = repository or PostgresOrderRepository(settings.database_url)
+    telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
+    configured_repository = repository or PostgresOrderRepository(
+        settings.database_url, tracer_provider=telemetry.provider
+    )
     configured_menu_client = menu_client or HttpMenuClient(
-        settings.menu_url, settings.http_timeout_seconds
+        settings.menu_url, settings.http_timeout_seconds, tracer_provider=telemetry.provider
     )
     configured_loyalty_client = loyalty_client or HttpLoyaltyClient(
-        settings.loyalty_url, settings.http_timeout_seconds
+        settings.loyalty_url, settings.http_timeout_seconds, tracer_provider=telemetry.provider
     )
 
     @asynccontextmanager
@@ -43,6 +48,7 @@ def create_app(
                     configured_loyalty_client,
                     interval_seconds=settings.loyalty_retry_interval_seconds,
                     batch_size=settings.loyalty_retry_batch_size,
+                    tracer=telemetry.tracer,
                 ),
                 name="loyalty-retry",
             )
@@ -54,6 +60,10 @@ def create_app(
                 retry_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await retry_task
+            if menu_client is None:
+                configured_menu_client.close()
+            if loyalty_client is None:
+                configured_loyalty_client.close()
 
     application = FastAPI(
         title="Cafetería - Servicio de pedidos",
@@ -71,6 +81,7 @@ def create_app(
         requests=HTTP_REQUESTS,
         duration=HTTP_DURATION,
         invalid_response=invalid_request_id,
+        telemetry=telemetry,
     )
     install_error_handlers(application)
     application.include_router(router)

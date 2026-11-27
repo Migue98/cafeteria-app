@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.clients import BackendError
@@ -50,9 +51,7 @@ class FakeGateway:
         self.loyalty_available = True
         self.orders_available = True
 
-    def list_products(
-        self, *, request_id: str, traceparent: str
-    ) -> list[dict[str, Any]]:
+    def list_products(self, *, request_id: str, traceparent: str) -> list[dict[str, Any]]:
         UUID(request_id)
         return self.products
 
@@ -116,16 +115,12 @@ class FakeGateway:
             raise BackendError("Pedidos no disponible.")
         return [order for order in self.orders if order["customer_id"] == customer_id]
 
-    def get_order(
-        self, *, order_id: str, request_id: str, traceparent: str
-    ) -> dict[str, Any]:
+    def get_order(self, *, order_id: str, request_id: str, traceparent: str) -> dict[str, Any]:
         if not self.orders_available:
             raise BackendError("Pedidos no disponible.")
         return next(order for order in self.orders if order["id"] == order_id)
 
-    def get_balance(
-        self, *, customer_id: str, request_id: str, traceparent: str
-    ) -> dict[str, Any]:
+    def get_balance(self, *, customer_id: str, request_id: str, traceparent: str) -> dict[str, Any]:
         if not self.loyalty_available:
             raise BackendError("Lealtad no disponible.")
         return {"customer_id": customer_id, "balance": self.balance, "updated_at": None}
@@ -138,9 +133,7 @@ class FakeGateway:
 
 
 class FailingGateway(FakeGateway):
-    def list_products(
-        self, *, request_id: str, traceparent: str
-    ) -> list[dict[str, Any]]:
+    def list_products(self, *, request_id: str, traceparent: str) -> list[dict[str, Any]]:
         raise BackendError("El menú no está disponible.")
 
 
@@ -152,9 +145,7 @@ class CSRFClient(TestClient):
     def post(self, url, **kwargs):
         if self.csrf_token is None:
             page = self.get("/")
-            self.csrf_token = re.search(
-                r'name="csrf-token" content="([^"]+)"', page.text
-            )[1]
+            self.csrf_token = re.search(r'name="csrf-token" content="([^"]+)"', page.text)[1]
         kwargs["headers"] = {
             "X-CSRF-Token": self.csrf_token,
             **kwargs.get("headers", {}),
@@ -203,6 +194,27 @@ def test_cart_supports_progressive_redirect_and_htmx_partial() -> None:
     assert "Café americano" in partial.text
     assert ">2<" in partial.text
     assert "$70.00" in partial.text
+
+
+@pytest.mark.parametrize(
+    ("trigger", "target"),
+    [("product-add-form-1", "#product-feedback-1"), ("cart-increment-1", "#cart-feedback")],
+)
+def test_cart_error_is_an_escaped_fragment_with_its_original_status(monkeypatch, trigger, target):
+    client, gateway = make_client()
+    assert client.get("/").status_code == 200
+
+    def unavailable(**_kwargs):
+        raise BackendError("Servicio no disponible. <contenido>")
+
+    monkeypatch.setattr(gateway, "list_products", unavailable)
+    response = client.post("/cart/items/1", headers={"HX-Request": "true", "HX-Trigger": trigger})
+    assert response.status_code == 503
+    assert response.headers["HX-Retarget"] == target
+    assert response.headers["HX-Reswap"] == "innerHTML"
+    assert 'role="alert"' in response.text
+    assert "&lt;contenido&gt;" in response.text
+    assert "<!doctype" not in response.text.lower()
 
 
 def test_checkout_creates_order_clears_cart_and_renders_receipt() -> None:
@@ -293,9 +305,7 @@ def test_history_survives_loyalty_outage_and_marks_balance_unavailable() -> None
     assert history.headers["cache-control"] == "private, no-store"
 
 
-def test_pending_points_refresh_receipt_and_history_without_repeating_checkout() -> (
-    None
-):
+def test_pending_points_refresh_receipt_and_history_without_repeating_checkout() -> None:
     client, gateway = make_client()
     gateway.loyalty_available = False
     client.post("/cart/items/1")
@@ -383,9 +393,7 @@ def test_duplicate_checkout_requests_use_the_same_prepared_key() -> None:
     def checkout_once(_):
         with TestClient(create_app(gateway)) as independent_client:
             independent_client.cookies.update(snapshot)
-            return independent_client.post(
-                "/checkout", headers={"X-CSRF-Token": owner.csrf_token}
-            )
+            return independent_client.post("/checkout", headers={"X-CSRF-Token": owner.csrf_token})
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         responses = list(pool.map(checkout_once, range(2)))

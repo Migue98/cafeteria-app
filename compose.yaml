@@ -1,3 +1,11 @@
+x-tracing-environment: &tracing-environment
+  OTEL_TRACES_EXPORTER: ${OTEL_TRACES_EXPORTER:-none}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://alloy:4318}
+  OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+  OTEL_EXPORTER_OTLP_TIMEOUT: ${OTEL_EXPORTER_OTLP_TIMEOUT:-10}
+  OTEL_BSP_SCHEDULE_DELAY: ${OTEL_BSP_SCHEDULE_DELAY:-5000}
+  OTEL_TRACES_SAMPLER: ${OTEL_TRACES_SAMPLER:-parentbased_always_on}
+
 services:
   postgres:
     image: docker.io/library/postgres:16.16-alpine3.24@sha256:1d5b02d3a9941fbd52437db4107f8c52d6297dac553ca1e5c299ebb3756b4857
@@ -23,6 +31,7 @@ services:
       context: ./svc-menu
       dockerfile: Containerfile
     environment:
+      <<: *tracing-environment
       APP_VERSION: ${APP_VERSION:-local}
       DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
     depends_on:
@@ -45,6 +54,7 @@ services:
       context: ./svc-lealtad
       dockerfile: Containerfile
     environment:
+      <<: *tracing-environment
       APP_VERSION: ${APP_VERSION:-local}
       DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
     depends_on:
@@ -67,6 +77,7 @@ services:
       context: ./svc-pedidos
       dockerfile: Containerfile
     environment:
+      <<: *tracing-environment
       APP_VERSION: ${APP_VERSION:-local}
       DATABASE_URL: postgresql://${POSTGRES_USER:-cafeteria}:${POSTGRES_PASSWORD:-cafeteria}@postgres:5432/${POSTGRES_DB:-cafeteria}
       MENU_URL: http://svc-menu:8001
@@ -99,6 +110,7 @@ services:
       context: ./frontend
       dockerfile: Containerfile
     environment:
+      <<: *tracing-environment
       APP_VERSION: ${APP_VERSION:-local}
       MENU_URL: http://svc-menu:8001
       ORDERS_URL: http://svc-pedidos:8002

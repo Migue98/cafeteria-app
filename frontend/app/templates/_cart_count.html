@@ -1,0 +1,1 @@
+<span id="nav-cart-count" aria-live="polite" aria-atomic="true"{% if oob|default(false) %} hx-swap-oob="outerHTML"{% endif %}> ({{ cart_count if cart_count is defined else navigation_cart_count(request.session) }})</span>

@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import asyncio
+import threading
 from uuid import UUID
 
 import httpx
 import pytest
 from fastapi.testclient import TestClient
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+from opentelemetry.trace import StatusCode
 
 from app.clients import DependencyUnavailable, HttpLoyaltyClient, HttpMenuClient, LoyaltyUnavailable
-from app.loyalty_retry import retry_pending_loyalty
+from app.loyalty_retry import loyalty_retry_loop, retry_pending_loyalty
 from app.main import create_app
 from app.models import MenuProduct, Order
 from app.repository import StoredOrder
@@ -225,8 +230,9 @@ def test_invalid_loyalty_response_keeps_order_pending(monkeypatch, bad_points) -
             },
         )
 
-    monkeypatch.setattr(httpx, "post", broken_award)
-    client, repository, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    loyalty = HttpLoyaltyClient("http://loyalty", 1)
+    monkeypatch.setattr(loyalty._client, "post", broken_award)
+    client, repository, _ = make_client(loyalty=loyalty)
     response = create_order(client)
     assert response.status_code == 201
     assert response.json()["loyalty_status"] == "pending"
@@ -235,8 +241,11 @@ def test_invalid_loyalty_response_keeps_order_pending(monkeypatch, bad_points) -
 
 
 def test_malformed_menu_response_returns_503_without_saving_order(monkeypatch) -> None:
-    monkeypatch.setattr(httpx, "get", lambda *args, **kwargs: httpx.Response(200, text="bad-json"))
-    client, repository, _ = make_client(menu=HttpMenuClient("http://menu", 1))
+    menu = HttpMenuClient("http://menu", 1)
+    monkeypatch.setattr(
+        menu._client, "get", lambda *args, **kwargs: httpx.Response(200, text="bad-json")
+    )
+    client, repository, _ = make_client(menu=menu)
     response = create_order(client)
     assert response.status_code == 503
     assert response.json()["code"] == "DEPENDENCY_UNAVAILABLE"
@@ -249,8 +258,9 @@ def test_malformed_menu_response_returns_503_without_saving_order(monkeypatch) -
 def test_invalid_menu_product_is_not_used_to_create_order(monkeypatch, field, value):
     product = FakeMenu().products[1].model_dump()
     product[field] = value
-    monkeypatch.setattr(httpx, "get", lambda *a, **kw: httpx.Response(200, json=product))
-    client, repository, _ = make_client(menu=HttpMenuClient("http://menu", 1))
+    menu = HttpMenuClient("http://menu", 1)
+    monkeypatch.setattr(menu._client, "get", lambda *a, **kw: httpx.Response(200, json=product))
+    client, repository, _ = make_client(menu=menu)
     assert create_order(client).status_code == 503
     assert repository.orders == {}
 
@@ -267,8 +277,9 @@ def test_loyalty_award_for_another_identity_keeps_order_pending(monkeypatch, fie
         result[field] = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
         return httpx.Response(200, json=result)
 
-    monkeypatch.setattr(httpx, "post", wrong_award)
-    client, repository, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    loyalty = HttpLoyaltyClient("http://loyalty", 1)
+    monkeypatch.setattr(loyalty._client, "post", wrong_award)
+    client, repository, _ = make_client(loyalty=loyalty)
     response = create_order(client)
     assert response.status_code == 201
     assert response.json()["loyalty_status"] == "pending"
@@ -288,8 +299,9 @@ def test_valid_integer_loyalty_response_is_accepted(monkeypatch, points):
             },
         )
 
-    monkeypatch.setattr(httpx, "post", valid_award)
-    client, _, _ = make_client(loyalty=HttpLoyaltyClient("http://loyalty", 1))
+    loyalty = HttpLoyaltyClient("http://loyalty", 1)
+    monkeypatch.setattr(loyalty._client, "post", valid_award)
+    client, _, _ = make_client(loyalty=loyalty)
     response = create_order(client)
     assert response.status_code == 201
     assert response.json()["loyalty_status"] == "awarded"
@@ -421,6 +433,75 @@ def test_automatic_retry_keeps_order_pending_when_loyalty_is_down() -> None:
     assert result.awarded == 0
     assert result.failed == 1
     assert repository.orders[UUID(created["id"])].loyalty_status == "pending"
+
+
+@pytest.mark.parametrize("still_down", [False, True], ids=["recovered", "failed"])
+def test_retry_exports_its_own_trace_and_correlated_outcome(still_down, caplog):
+    import json
+
+    loyalty = FakeLoyalty(fails=True)
+    client, repository, _ = make_client(loyalty=loyalty)
+    order = create_order(client).json()
+    runtime = client.app.state.telemetry
+    exporter = InMemorySpanExporter()
+    runtime.provider.add_span_processor(SimpleSpanProcessor(exporter))
+    loyalty.fails = still_down
+    caplog.clear()
+    try:
+        result = retry_pending_loyalty(repository, loyalty, batch_size=100, tracer=runtime.tracer)
+        spans = exporter.get_finished_spans()
+        batch = next(span for span in spans if span.name == "loyalty.retry_batch")
+        retry = next(span for span in spans if span.name == "loyalty.retry")
+        assert batch.parent is None
+        assert retry.parent.span_id == batch.context.span_id
+        assert retry.context.trace_id == batch.context.trace_id
+        assert result.failed == int(still_down)
+        assert result.awarded == int(not still_down)
+        assert retry.status.status_code == (StatusCode.ERROR if still_down else StatusCode.UNSET)
+        event = next(
+            json.loads(record.getMessage())
+            for record in caplog.records
+            if record.getMessage().startswith("{")
+        )
+        assert event["order_id"] == order["id"]
+        assert event["trace_id"] == f"{retry.context.trace_id:032x}"
+        assert event["span_id"] == f"{retry.context.span_id:016x}"
+    finally:
+        runtime.shutdown()
+
+
+def test_worker_shutdown_waits_for_the_active_thread_before_closing_resources():
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    class SlowRepository(FakeRepository):
+        def list_pending_loyalty(self, *, limit):
+            started.set()
+            release.wait(timeout=5)
+            finished.set()
+            return [], 0
+
+    async def run():
+        task = asyncio.create_task(
+            loyalty_retry_loop(
+                SlowRepository(), FakeLoyalty(), interval_seconds=900, batch_size=100
+            )
+        )
+        try:
+            assert await asyncio.to_thread(started.wait, 5)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+        finally:
+            release.set()
+            if not started.is_set():
+                task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert finished.is_set()
+
+    asyncio.run(run())
 
 
 def test_idempotency_key_is_required() -> None:

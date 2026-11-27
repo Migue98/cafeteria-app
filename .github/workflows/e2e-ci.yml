@@ -8,6 +8,7 @@ on:
       - "svc-pedidos/**"
       - "svc-lealtad/**"
       - "tests/**"
+      - "ruff.toml"
       - "scripts/run_e2e.py"
       - "scripts/validate_contracts.py"
       - "compose.yaml"
@@ -22,6 +23,7 @@ on:
       - "svc-pedidos/**"
       - "svc-lealtad/**"
       - "tests/**"
+      - "ruff.toml"
       - "scripts/run_e2e.py"
       - "scripts/validate_contracts.py"
       - "compose.yaml"
@@ -35,7 +37,7 @@ permissions:
 jobs:
   integrated-tests:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -52,6 +54,14 @@ jobs:
           python -m pip install pip==26.3
           python -m pip install --require-hashes -r tests/requirements.txt
 
+      - name: Install Chromium and system dependencies
+        run: python -m playwright install --with-deps chromium
+
+      - name: Check browser tests and shared helpers
+        run: |
+          python -m ruff check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py scripts/run_e2e.py
+          python -m ruff format --check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py scripts/run_e2e.py
+
       - name: Validate public Compose template
         env:
           SESSION_SECRET: ci-only-synthetic-session-secret-not-for-production
@@ -60,5 +70,14 @@ jobs:
           ALLOWED_HOSTS: cafe.example,localhost,127.0.0.1
         run: docker compose -f compose.yaml -f compose.public.yaml config --quiet
 
-      - name: Verify Docker Compose flow and concurrent requests
+      - name: Verify HTTP and Chromium flows on isolated Compose
         run: python scripts/run_e2e.py
+
+      - name: Upload browser evidence and failure traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-evidence
+          path: test-results/browser/
+          if-no-files-found: ignore
+          retention-days: 7

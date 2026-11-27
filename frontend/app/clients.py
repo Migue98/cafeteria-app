@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import Any, Protocol
 
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.trace import TracerProvider
 
 from .config import Settings
 
 
 class BackendError(RuntimeError):
-    def __init__(
-        self, message: str, *, status_code: int = 503, code: str = "BACKEND_ERROR"
-    ):
+    def __init__(self, message: str, *, status_code: int = 503, code: str = "BACKEND_ERROR"):
         self.status_code = status_code
         self.code = code
         super().__init__(message)
@@ -34,9 +34,7 @@ def _list_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 class BackendGateway(Protocol):
-    def list_products(
-        self, *, request_id: str, traceparent: str
-    ) -> list[dict[str, Any]]: ...
+    def list_products(self, *, request_id: str, traceparent: str) -> list[dict[str, Any]]: ...
 
     def create_order(
         self,
@@ -52,9 +50,7 @@ class BackendGateway(Protocol):
         self, *, customer_id: str, request_id: str, traceparent: str
     ) -> list[dict[str, Any]]: ...
 
-    def get_order(
-        self, *, order_id: str, request_id: str, traceparent: str
-    ) -> dict[str, Any]: ...
+    def get_order(self, *, order_id: str, request_id: str, traceparent: str) -> dict[str, Any]: ...
 
     def get_balance(
         self, *, customer_id: str, request_id: str, traceparent: str
@@ -66,9 +62,12 @@ class BackendGateway(Protocol):
 
 
 class HttpBackendGateway:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(
+        self, settings: Settings, *, tracer_provider: TracerProvider | None = None
+    ) -> None:
         self._settings = settings
         self._client = httpx.Client(timeout=settings.http_timeout_seconds)
+        HTTPXClientInstrumentor.instrument_client(self._client, tracer_provider=tracer_provider)
 
     def _request(
         self,
@@ -111,9 +110,7 @@ class HttpBackendGateway:
             )
         return payload
 
-    def list_products(
-        self, *, request_id: str, traceparent: str
-    ) -> list[dict[str, Any]]:
+    def list_products(self, *, request_id: str, traceparent: str) -> list[dict[str, Any]]:
         payload = self._request(
             "GET",
             f"{self._settings.menu_url}/api/v1/products",
@@ -153,9 +150,7 @@ class HttpBackendGateway:
         )
         return _list_items(payload)
 
-    def get_balance(
-        self, *, customer_id: str, request_id: str, traceparent: str
-    ) -> dict[str, Any]:
+    def get_balance(self, *, customer_id: str, request_id: str, traceparent: str) -> dict[str, Any]:
         payload = self._request(
             "GET",
             f"{self._settings.loyalty_url}/api/v1/customers/{customer_id}/points",
@@ -167,9 +162,7 @@ class HttpBackendGateway:
             raise _invalid_backend_response()
         return payload
 
-    def get_order(
-        self, *, order_id: str, request_id: str, traceparent: str
-    ) -> dict[str, Any]:
+    def get_order(self, *, order_id: str, request_id: str, traceparent: str) -> dict[str, Any]:
         return self._request(
             "GET",
             f"{self._settings.orders_url}/api/v1/orders/{order_id}",
@@ -193,9 +186,7 @@ class HttpBackendGateway:
                     traceparent=traceparent,
                 )
                 status = payload.get("status")
-                dependencies[name] = (
-                    status if status in ("healthy", "degraded") else "down"
-                )
+                dependencies[name] = status if status in ("healthy", "degraded") else "down"
             except BackendError:
                 dependencies[name] = "down"
         return dependencies

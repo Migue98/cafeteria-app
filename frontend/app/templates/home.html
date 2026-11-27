@@ -3,7 +3,14 @@
 {% block title %}Menú · Café Nube{% endblock %}
 
 {% block content %}
-<main>
+<main hx-ext="response-targets">
+  {% if checkout_error %}
+  <div class="alert" role="alert">
+    <strong>No pudimos confirmar el pedido.</strong>
+    <span>{{ checkout_error }}</span>
+    <a href="#cart-panel">Volver al carrito</a>
+  </div>
+  {% endif %}
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-copy">
       <p class="eyebrow">Tu pausa, bien preparada</p>
@@ -31,13 +38,6 @@
     </div>
   </section>
 
-  {% if checkout_error %}
-  <div class="alert" role="alert">
-    <strong>No pudimos confirmar el pedido.</strong>
-    <span>{{ checkout_error }}</span>
-  </div>
-  {% endif %}
-
   <section class="menu-shell" id="menu" aria-labelledby="menu-title">
     <div class="menu-main">
       <div class="section-heading">
@@ -49,9 +49,9 @@
       </div>
 
       <nav class="category-list" aria-label="Categorías del menú">
-        <a class="chip {% if not selected_category %}active{% endif %}" href="/">Todo</a>
+        <a class="chip {% if not selected_category %}active{% endif %}" href="/#menu"{% if not selected_category %} aria-current="page"{% endif %}>Todo</a>
         {% for category in categories %}
-        <a class="chip {% if selected_category == category %}active{% endif %}" href="/?category={{ category }}#menu">
+        <a class="chip {% if selected_category == category %}active{% endif %}" href="/?category={{ category }}#menu"{% if selected_category == category %} aria-current="page"{% endif %}>
           {{ category|replace('-', ' ')|title }}
         </a>
         {% endfor %}
@@ -86,12 +86,16 @@
             </div>
             <h3>{{ product.name }}</h3>
             <p>{{ product.description }}</p>
-            <form method="post" action="/cart/items/{{ product.id }}"
+            <form id="product-add-form-{{ product.id }}" method="post" action="/cart/items/{{ product.id }}"
                   hx-post="/cart/items/{{ product.id }}"
-                  hx-target="#cart-panel" hx-swap="outerHTML">
+                  hx-target="#cart-panel" hx-swap="outerHTML" hx-disabled-elt="find button">
               <input type="hidden" name="csrf_token" value="{{ request.session['csrf_token'] }}">
-              <button class="button button-add" type="submit">Agregar al carrito</button>
+              <button class="button button-add" id="product-add-{{ product.id }}" type="submit">
+                <span class="button-label">Agregar al carrito</span>
+                <span class="button-busy">Agregando…</span>
+              </button>
             </form>
+            <div class="cart-feedback" id="product-feedback-{{ product.id }}" aria-live="polite"></div>
           </div>
         </article>
         {% endfor %}

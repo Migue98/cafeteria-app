@@ -76,13 +76,18 @@ podman compose down --volumes
 
 ```bash
 cd svc-pedidos
-python -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate  # En PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -p no:cacheprovider
-ruff check app tests
-ruff format --check app tests
+python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
+ruff check app tests ../tests/observability
+ruff format --check app tests ../tests/observability
 ```
+
+La configuración de pytest está en `pyproject.toml`; Ruff hereda las reglas
+comunes de `../ruff.toml`. En Windows se crea el entorno con
+`py -3.13 -m venv .venv`. Consulta la
+[guía de herramientas](../docs/development-tooling.md).
 
 Variables disponibles:
 

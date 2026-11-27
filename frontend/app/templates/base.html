@@ -9,8 +9,11 @@
     <meta name="csrf-token" content="{{ request.session.get('csrf_token', '') }}">
     <meta name="htmx-config" content='{"allowEval":false,"allowScriptTags":false,"selfRequestsOnly":true,"includeIndicatorStyles":false,"historyCacheSize":0}'>
     <script src="/static/vendor/htmx-2.0.4.min.js" defer></script>
+    <script src="/static/vendor/response-targets-2.0.4.min.js" defer></script>
+    <script src="/static/storefront.js" defer></script>
   </head>
   <body hx-headers='{"X-CSRF-Token":"{{ request.session.get("csrf_token", "") }}"}'>
+    <a class="skip-link" href="#main-content">Saltar al contenido</a>
     <header class="site-header">
       <a class="brand" href="/" aria-label="Ir al menú de Café Nube">
         <span class="brand-mark" aria-hidden="true">
@@ -22,13 +25,15 @@
         <span><strong>Café Nube</strong><small>Hecho cerca. Servido fácil.</small></span>
       </a>
       <nav aria-label="Navegación principal">
-        <a href="/">Menú</a>
-        <a href="/orders">Mis pedidos</a>
-        <a class="nav-cart" href="/#cart-panel">Carrito</a>
+        <a href="/"{% if request.url.path == '/' %} aria-current="page"{% endif %}>Menú</a>
+        <a href="/orders"{% if request.url.path == '/orders' %} aria-current="page"{% endif %}>Mis pedidos</a>
+        <a class="nav-cart" href="/#cart-panel">Carrito{% include "_cart_count.html" %}</a>
       </nav>
     </header>
 
-    {% block content %}{% endblock %}
+    <div id="main-content" tabindex="-1">
+      {% block content %}{% endblock %}
+    </div>
 
     <footer class="site-footer">
       <p>Café Nube · Proyecto DevOps</p>

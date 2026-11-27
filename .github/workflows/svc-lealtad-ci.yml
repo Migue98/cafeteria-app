@@ -3,6 +3,7 @@ name: svc-lealtad CI
 on:
   pull_request:
     paths:
+      - "ruff.toml"
       - "tests/observability/**"
       - "svc-lealtad/**"
       - "docs/openapi/**"
@@ -11,6 +12,7 @@ on:
   push:
     branches: [main]
     paths:
+      - "ruff.toml"
       - "tests/observability/**"
       - "svc-lealtad/**"
       - "docs/openapi/**"
@@ -53,7 +55,7 @@ jobs:
           ruff format --check app tests ../tests/observability
 
       - name: Run tests
-        run: python -m pytest tests ../tests/observability -p no:cacheprovider
+        run: python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
 
       - name: Build container image
         run: docker build -f Containerfile -t cafeteria-svc-lealtad:${{ github.sha }} .

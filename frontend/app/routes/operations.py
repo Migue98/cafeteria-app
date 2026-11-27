@@ -14,11 +14,7 @@ def health(request: Request, backend: GatewayDependency) -> JSONResponse:
     dependencies = backend.health(
         request_id=request.state.request_id, traceparent=request.state.traceparent
     )
-    status = (
-        "healthy"
-        if all(value == "healthy" for value in dependencies.values())
-        else "degraded"
-    )
+    status = "healthy" if all(value == "healthy" for value in dependencies.values()) else "degraded"
     return JSONResponse(
         {
             "service": "frontend",
@@ -31,6 +27,4 @@ def health(request: Request, backend: GatewayDependency) -> JSONResponse:
 
 @router.get("/metrics", tags=["operación"])
 def metrics() -> Response:
-    return Response(
-        content=generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST}
-    )
+    return Response(content=generate_latest(), headers={"Content-Type": CONTENT_TYPE_LATEST})

@@ -1,0 +1,18 @@
+# Exclusivo del proyecto desechable: sustituye Telegram por un webhook interno.
+services:
+  grafana:
+    volumes:
+      - ./tests/monitoring/webhook-routing.yaml:/etc/grafana/provisioning/alerting/routing.yaml:ro
+    depends_on:
+      alert-receiver:
+        condition: service_started
+  alert-receiver:
+    build:
+      context: ./frontend
+      dockerfile: Containerfile
+    command: [python, /tests/notification_receiver.py]
+    volumes:
+      - ./tests/monitoring/notification_receiver.py:/tests/notification_receiver.py:ro
+    ports:
+      - "127.0.0.1:${ALERT_RECEIVER_PORT:-13080}:8080"
+    mem_limit: 64m

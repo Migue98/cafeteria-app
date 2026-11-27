@@ -39,13 +39,9 @@ def test_normal_forms_and_htmx_support_the_same_library_token():
     gateway = FakeGateway()
     client = TestClient(create_app(gateway))
     token = bootstrap(client)
-    form = client.post(
-        "/cart/items/1", data={"csrf_token": token}, follow_redirects=False
-    )
+    form = client.post("/cart/items/1", data={"csrf_token": token}, follow_redirects=False)
     assert form.status_code == 303
-    fragment = client.post(
-        "/cart/items/1", headers={"HX-Request": "true", "X-CSRF-Token": token}
-    )
+    fragment = client.post("/cart/items/1", headers={"HX-Request": "true", "X-CSRF-Token": token})
     assert fragment.status_code == 200
     assert 'name="csrf_token"' in fragment.text
     assert token in fragment.text
@@ -82,15 +78,10 @@ def test_token_from_another_session_and_modified_cookie_are_rejected():
     first, second = TestClient(app), TestClient(app)
     stolen = bootstrap(first)
     bootstrap(second)
-    assert (
-        second.post("/cart/items/1", headers={"X-CSRF-Token": stolen}).status_code
-        == 403
-    )
+    assert second.post("/cart/items/1", headers={"X-CSRF-Token": stolen}).status_code == 403
     first.cookies.clear()
     first.cookies.set("cafeteria_session", "forged-unsigned-session")
-    assert (
-        first.post("/cart/items/1", headers={"X-CSRF-Token": stolen}).status_code == 403
-    )
+    assert first.post("/cart/items/1", headers={"X-CSRF-Token": stolen}).status_code == 403
 
 
 @pytest.mark.parametrize("cookie_value", [None, "unsigned", "raw-token", "tampered"])
@@ -106,9 +97,7 @@ def test_csrf_cookie_must_be_present_and_correctly_signed(cookie_value):
         }.get(cookie_value, cookie_value)
     client.cookies.clear()
     client.cookies.update(cookies)
-    assert (
-        client.post("/cart/items/1", headers={"X-CSRF-Token": token}).status_code == 403
-    )
+    assert client.post("/cart/items/1", headers={"X-CSRF-Token": token}).status_code == 403
     renewed = bootstrap(client)
     assert renewed != token
     assert (
@@ -128,10 +117,7 @@ def test_valid_csrf_cookie_and_token_cannot_be_moved_to_another_session():
     cookies["cafeteria_csrf"] = first.cookies["cafeteria_csrf"]
     second.cookies.clear()
     second.cookies.update(cookies)
-    assert (
-        second.post("/cart/items/1", headers={"X-CSRF-Token": first_token}).status_code
-        == 403
-    )
+    assert second.post("/cart/items/1", headers={"X-CSRF-Token": first_token}).status_code == 403
 
 
 def test_csrf_settings_are_isolated_between_app_instances():
@@ -140,9 +126,7 @@ def test_csrf_settings_are_isolated_between_app_instances():
     )
     first_token = bootstrap(first)
     second = TestClient(
-        create_app(
-            FakeGateway(), replace(load_settings(), session_secret="second-test")
-        )
+        create_app(FakeGateway(), replace(load_settings(), session_secret="second-test"))
     )
     second_token = bootstrap(second)
     for client, token in ((first, first_token), (second, second_token)):
@@ -162,9 +146,7 @@ def test_expired_tokens_reject_post_and_can_be_renewed_by_loading_menu(monkeypat
     client = TestClient(create_app(gateway, settings))
     token = bootstrap(client)
     assert (
-        client.post(
-            "/cart/items/1", data={"csrf_token": token}, follow_redirects=False
-        ).status_code
+        client.post("/cart/items/1", data={"csrf_token": token}, follow_redirects=False).status_code
         == 303
     )
     now = TimestampSigner("test-only").get_timestamp()
@@ -207,9 +189,7 @@ def test_chunked_and_declared_body_limits_apply_with_valid_token():
         headers={"X-CSRF-Token": token},
     )
     assert response.status_code == 413
-    response = client.post(
-        "/cart/items/1", data={"csrf_token": token, "extra": "x" * 9000}
-    )
+    response = client.post("/cart/items/1", data={"csrf_token": token, "extra": "x" * 9000})
     assert response.status_code == 413
     response = client.post(
         "/cart/items/1",
@@ -254,7 +234,11 @@ def test_every_rendered_form_contains_token_and_has_no_inline_js():
     audit.feed(page.text)
     assert audit.forms >= 6
     assert audit.forms == audit.fields
-    assert audit.scripts == ["/static/vendor/htmx-2.0.4.min.js"]
+    assert audit.scripts == [
+        "/static/vendor/htmx-2.0.4.min.js",
+        "/static/vendor/response-targets-2.0.4.min.js",
+        "/static/storefront.js",
+    ]
 
 
 @pytest.mark.parametrize("path", ["/", "/orders", "/not-a-route", "/static/styles.css"])
@@ -272,9 +256,7 @@ def test_security_headers_apply_to_success_and_errors(path):
 
 
 def test_unknown_host_is_rejected_with_security_headers():
-    response = TestClient(create_app(FakeGateway())).get(
-        "/", headers={"Host": "attacker.example"}
-    )
+    response = TestClient(create_app(FakeGateway())).get("/", headers={"Host": "attacker.example"})
     assert response.status_code == 400
     assert response.headers["X-Frame-Options"] == "DENY"
 
@@ -288,6 +270,17 @@ def test_local_htmx_has_pinned_content_and_license():
         == "69caefd0da92269066e725d7fe175e26b9d50c962e3056459c0c477154cdb9d3"
     )
     assert "Zero-Clause BSD" in client.get("/static/vendor/LICENSE.htmx").text
+
+
+def test_response_targets_is_pinned_and_served_locally():
+    client = TestClient(create_app(FakeGateway()))
+    asset = client.get("/static/vendor/response-targets-2.0.4.min.js")
+    assert asset.status_code == 200
+    assert hashlib.sha384(asset.content.replace(b"\r\n", b"\n")).hexdigest() == (
+        "4f8d6882550fbd72c6055c91759b154713569ce3aa0b29da3ee6e35158f186c8c54"
+        "caac524610c9b7ff428698d43e3e0"
+    )
+    assert "BSD Zero Clause License" in client.get("/static/vendor/LICENSE.response-targets").text
 
 
 def production_settings(**overrides):

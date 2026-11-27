@@ -112,7 +112,7 @@ parámetros, modelos, códigos de operación y configuración de seguridad.
 Para validar cada componente, desde su carpeta:
 
 ```powershell
-python -m pytest tests ../tests/observability -p no:cacheprovider
+python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
 ruff check app tests ../tests/observability
 ruff format --check app tests ../tests/observability
 ```

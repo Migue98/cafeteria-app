@@ -53,6 +53,11 @@ Cada intento escribe un evento con `order_id`, `request_id`, `trace_id` y
 `span_id`, y propaga el contexto a lealtad. Se utiliza el
 [formato común de logs](application-observability.md).
 
+OpenTelemetry crea una traza por lote y un span hijo por intento. Las llamadas
+HTTP y consultas SQL se instrumentan con el mismo proveedor del servicio.
+Al apagar la aplicación se espera el hilo del lote activo antes de cerrar
+clientes y exportadores. Consulta la [guía de trazas](opentelemetry-tracing.md).
+
 ## Validación
 
 - Ruff y formato: correctos.

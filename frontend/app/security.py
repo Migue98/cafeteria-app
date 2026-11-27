@@ -175,16 +175,10 @@ class CSRFMiddleware:
         if source is not None:
             try:
                 parsed = urlsplit(source)
-                valid_source = (
-                    not parsed.path and not parsed.query and not parsed.fragment
-                )
+                valid_source = not parsed.path and not parsed.query and not parsed.fragment
             except ValueError:
                 valid_source = False
-            if (
-                not valid_source
-                or _origin(source) is None
-                or _origin(source) != _origin(target)
-            ):
+            if not valid_source or _origin(source) is None or _origin(source) != _origin(target):
                 await reject()
                 return
         elif referer is not None and (
@@ -221,9 +215,7 @@ class CSRFMiddleware:
                 break
         if supplied is None:
             try:
-                values = parse_qs(body.decode("utf-8"), max_num_fields=50).get(
-                    "csrf_token", []
-                )
+                values = parse_qs(body.decode("utf-8"), max_num_fields=50).get("csrf_token", [])
                 supplied = values[0] if len(values) == 1 else ""
             except (UnicodeDecodeError, ValueError):
                 supplied = ""

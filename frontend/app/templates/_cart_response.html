@@ -1,0 +1,5 @@
+{% include "_cart.html" %}
+{% with oob=true %}{% include "_cart_count.html" %}{% endwith %}
+{% if changed_product_id is defined %}
+<div id="product-feedback-{{ changed_product_id }}" hx-swap-oob="innerHTML"></div>
+{% endif %}

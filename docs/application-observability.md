@@ -1,8 +1,9 @@
 # Logs y correlación entre servicios
 
 Los cuatro servicios emiten eventos JSON en stdout. Cada petición conserva el
-`X-Request-ID` y el `trace_id` a través de los saltos HTTP; cada servicio genera
-su propio `span_id` y registra el anterior en `parent_span_id`.
+`X-Request-ID` y el `trace_id` a través de los saltos HTTP. OpenTelemetry genera
+los spans de servidor, cliente HTTP y PostgreSQL; los logs usan el contexto real
+del SDK. Consulta la [guía de instrumentación y exportación](opentelemetry-tracing.md).
 
 ## Campos comunes
 
@@ -15,7 +16,7 @@ su propio `span_id` y registra el anterior en `parent_span_id`.
 | `request_id` | UUID que permite correlacionar una petición y sus llamadas. |
 | `trace_id` | Identificador hexadecimal de 32 caracteres de la traza. |
 | `span_id` | Identificador hexadecimal de 16 caracteres del salto actual. |
-| `parent_span_id` | Span recibido del servicio que hizo la llamada. |
+| `parent_span_id` | Padre del span actual; en una petición remota corresponde al cliente HTTP que la inició. |
 
 `request_completed` añade `method`, `path`, `route`, `status_code` y
 `duration_ms`. Usa `INFO` para respuestas menores de 400, `WARNING` para 4xx y
@@ -26,28 +27,32 @@ Una excepción inesperada registra además `request_failed`, con el detalle en
 los logs internos, y contabiliza la petición como 500. No se registran cuerpos
 de peticiones, cookies ni cabeceras de autorización.
 
-Los eventos de resumen del worker no corresponden a una petición y llevan los
-campos de correlación en `null`. Cada intento de recuperación de puntos sí
-genera una traza nueva, registra `order_id` y propaga su contexto a lealtad.
+Los eventos de resumen del worker emitidos fuera del lote no corresponden a
+una petición y llevan los campos de correlación en `null`. Cada lote inicia
+una traza nueva, con un span hijo por intento; el intento registra `order_id`
+y propaga su contexto a lealtad y a las consultas SQL.
 
 ## Encabezados
 
 - `X-Request-ID`: si falta, el servicio genera un UUID; si es inválido, responde
   422 con un UUID nuevo y registra el rechazo.
-- `traceparent`: se admite el formato W3C de versión `00`. Un encabezado válido
-  conserva la traza y sus flags, pero genera un span nuevo para el servicio.
-  Si falta, está mal formado o contiene identificadores de solo ceros, se inicia
-  una traza nueva. Las versiones distintas de `00` también inician otra traza.
+- `traceparent`: se valida y propaga mediante OpenTelemetry y W3C Trace Context.
+  Un encabezado válido conserva la traza y sus flags, con un span nuevo para
+  el servicio. Si falta o es inválido se inicia una traza nueva. Las respuestas
+  emiten el formato `00`. Un padre no muestreado conserva su identificador,
+  pero sus spans no se exportan con el muestreo predeterminado.
 - Las respuestas atendidas por el middleware devuelven ambos encabezados.
   Los errores de negocio incluyen el mismo `trace_id` en su Problem JSON.
 
 Ejemplo de una compra:
 
 ```text
-frontend       trace=T, span=A
-└─ svc-pedidos trace=T, span=B, parent=A
-   ├─ svc-menu    trace=T, span=C, parent=B
-   └─ svc-lealtad trace=T, span=D, parent=B
+frontend SERVER       trace=T, span=A
+└─ HTTP CLIENT        trace=T, span=B, parent=A
+   └─ pedidos SERVER  trace=T, span=C, parent=B
+      ├─ SQL CLIENT   trace=T, span=D, parent=C
+      └─ HTTP CLIENT  trace=T, span=E, parent=C
+         └─ lealtad SERVER trace=T, span=F, parent=E
 ```
 
 Cada petición del navegador inicia su propio recorrido si no trae un contexto
@@ -75,31 +80,34 @@ un pedido. El mismo filtrado sirve para el `trace_id` de una compra o de un
 error de negocio.
 
 Uvicorn conserva sus mensajes operativos y de acceso en su formato habitual;
-los eventos de la aplicación son las líneas JSON. Esta implementación permite
-correlacionar logs; todavía no exporta spans a Tempo ni incorpora un SDK de
-OpenTelemetry. Esa integración corresponde al bloque de observabilidad del
-despliegue.
+los eventos de la aplicación son las líneas JSON. El SDK ya permite exportar
+spans por OTLP HTTP/protobuf o a stdout; por defecto conserva el contexto sin
+exportación. Grafana ya consulta las métricas mediante el
+[monitoreo local](local-monitoring.md). La
+[extensión de logs y trazas](local-logs-traces.md) añade Alloy, Loki y Tempo y
+permite abrir la traza desde un log y regresar a los logs del servicio.
 
 ## Desarrollo y verificación
 
 Cada imagen mantiene su contexto de construcción independiente. Por eso cada
 servicio contiene `app/observability.py` con el mismo comportamiento. La prueba
-común compara los árboles sintácticos para impedir que esas copias diverjan;
-el formato puede diferir según la configuración de Ruff de cada servicio.
+común compara los árboles sintácticos para impedir que esas copias diverjan.
+Los cuatro componentes heredan las mismas reglas y formato del `ruff.toml` raíz.
 
 Desde el directorio de cualquiera de los cuatro servicios, con sus dependencias
 de desarrollo instaladas:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests ../tests/observability -p no:cacheprovider
+.\.venv\Scripts\python.exe -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
 ```
 
-Las pruebas comunes cubren encabezados inválidos, spans nuevos, flags,
-respuestas 404/422, fallos inesperados y aislamiento entre peticiones
-concurrentes. Los cuatro workflows de CI ejecutan este contrato.
+Las pruebas comunes cubren encabezados inválidos, spans reales, flags,
+respuestas 404/422, fallos inesperados y aislamiento entre peticiones y
+aplicaciones. También verifican el envío OTLP real y el vaciado al apagar el
+proveedor. Los cuatro workflows de CI ejecutan este contrato.
 
-La suite E2E crea una compra real y lee los logs JSON de los cuatro contenedores
-para comprobar `request_id`, `trace_id` y los enlaces entre spans:
+La suite E2E crea una compra real y lee los logs y spans JSON exportados de los
+cuatro contenedores para comprobar identificadores, clientes HTTP y consultas SQL:
 
 ```powershell
 python -m pip install -r tests/requirements.txt

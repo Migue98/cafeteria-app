@@ -21,6 +21,13 @@ no repiten la compra ni ejecutan la acreditación. Consulta la
 Los formularios funcionan con navegación HTML normal. HTMX mejora las
 operaciones del carrito sin convertir la aplicación en una SPA.
 
+La interfaz mantiene menú, historial y carrito visibles en móvil, controles
+táctiles de 44 px, navegación por teclado y avisos de error junto a la operación.
+HTMX y su extensión oficial `response-targets` se sirven localmente;
+`app/static/storefront.js` conserva el foco y muestra fechas en la zona del
+navegador. Consulta la [revisión de usabilidad](../docs/visual-usability-review.md)
+para las capturas y los recorridos en cinco anchos.
+
 ## Organización del código
 
 `app/main.py` construye la aplicación y conecta seguridad, recursos y rutas.
@@ -38,7 +45,7 @@ un doble envío no cree dos pedidos.
 ## Desarrollo
 
 ```powershell
-python -m venv .venv
+py -3.13 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
 ```
@@ -50,10 +57,16 @@ raíz y abre <http://localhost:8000>.
 ## Validación
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests ../tests/observability -p no:cacheprovider
-.\.venv\Scripts\ruff.exe check app tests
-.\.venv\Scripts\ruff.exe format --check app tests
+.\.venv\Scripts\python.exe -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
+.\.venv\Scripts\python.exe -m ruff check app tests ../tests/observability
+.\.venv\Scripts\python.exe -m ruff format --check app tests ../tests/observability
 ```
+
+`pyproject.toml` configura pytest y hereda las reglas comunes de `../ruff.toml`:
+Python 3.13, líneas de 100 caracteres y el mismo conjunto de reglas de los
+backends. Las versiones de pytest y Ruff siguen fijadas en los locks.
+En Linux se puede crear el entorno con `python3.13 -m venv .venv`.
+Consulta la [guía de herramientas](../docs/development-tooling.md).
 
 Los formularios requieren un token generado y validado por
 `fastapi-csrf-protect==1.0.7`, con una cookie CSRF firmada y ligada a la sesión.

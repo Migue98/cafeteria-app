@@ -1,0 +1,38 @@
+apiVersion: 1
+
+datasources:
+  - name: Loki
+    uid: cafeteria-loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    version: 1
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id"\s*:\s*"([0-9a-f]{32})"'
+          datasourceUid: cafeteria-tempo
+          url: '$${__value.raw}'
+          urlDisplayLabel: Ver traza
+
+  - name: Tempo
+    uid: cafeteria-tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    version: 1
+    jsonData:
+      tracesToLogsV2:
+        datasourceUid: cafeteria-loki
+        spanStartTimeShift: -1m
+        spanEndTimeShift: 1m
+        tags:
+          - key: service.name
+            value: service
+        filterByTraceID: true
+        filterBySpanID: false
+        customQuery: true
+        query: '{job="cafeteria", $${__tags}} | json | trace_id="$${__span.traceId}"'

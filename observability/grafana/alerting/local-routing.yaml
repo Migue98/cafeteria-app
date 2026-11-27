@@ -1,0 +1,30 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: cafeteria-local-only
+    receivers:
+      - uid: cafeteria-local-only
+        type: email
+        settings:
+          addresses: unused@example.invalid
+
+# Las reglas se evalúan y son visibles; hasta activar Telegram se silencian sus avisos.
+muteTimes:
+  - orgId: 1
+    name: cafeteria-local-only
+    time_intervals:
+      - times:
+          - start_time: "00:00"
+            end_time: "24:00"
+
+policies:
+  - orgId: 1
+    receiver: cafeteria-local-only
+    group_by: [alertname, service]
+    group_wait: 10s
+    group_interval: 30s
+    repeat_interval: 1h
+    routes:
+      - receiver: cafeteria-local-only
+        mute_time_intervals: [cafeteria-local-only]

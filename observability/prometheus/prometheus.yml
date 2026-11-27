@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 5s
+  scrape_timeout: 3s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: cafeteria
+    metrics_path: /metrics
+    honor_labels: true
+    static_configs:
+      - targets: [frontend:8000]
+        labels:
+          service: frontend
+      - targets: [svc-menu:8001]
+        labels:
+          service: svc-menu
+      - targets: [svc-pedidos:8002]
+        labels:
+          service: svc-pedidos
+      - targets: [svc-lealtad:8003]
+        labels:
+          service: svc-lealtad

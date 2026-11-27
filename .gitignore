@@ -20,6 +20,7 @@ venv/
 node_modules/
 dist/
 build/
+test-results/
 
 # IDE y sistema operativo
 .idea/

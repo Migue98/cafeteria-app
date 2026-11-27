@@ -3,12 +3,14 @@ name: frontend CI
 on:
   pull_request:
     paths:
+      - "ruff.toml"
       - "tests/observability/**"
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
   push:
     branches: [main]
     paths:
+      - "ruff.toml"
       - "tests/observability/**"
       - "frontend/**"
       - ".github/workflows/frontend-ci.yml"
@@ -45,7 +47,7 @@ jobs:
           ruff format --check app tests ../tests/observability
 
       - name: Run tests
-        run: python -m pytest tests ../tests/observability -p no:cacheprovider
+        run: python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
 
       - name: Build container image
         run: docker build -f Containerfile -t cafeteria-frontend:${{ github.sha }} .

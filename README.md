@@ -7,7 +7,13 @@ construcción, despliegue GitOps y observabilidad sobre Kubernetes.
 
 > **Estado actual:** el frontend y los tres backends (`svc-menu`, `svc-pedidos`
 > y `svc-lealtad`) cuentan con MVP ejecutable, pruebas y entorno
-> contenedorizado con PostgreSQL.
+> contenedorizado con PostgreSQL. La plataforma de observabilidad y el cierre
+> del software están implementados y validados localmente; la integración
+> con infraestructura y la publicación siguen pendientes.
+
+Para incorporarte al equipo, comienza por la
+[guía de entrega y reproducción](docs/team-handoff.md): requisitos, configuración,
+arranque, recorrido manual, observabilidad, pruebas y solución de problemas.
 
 ## Repositorios
 
@@ -86,14 +92,20 @@ Los archivos fuente, convenciones y ejemplos están en
 ├── svc-lealtad/       # Puntos: app/, db/init.sql y tests/
 ├── tests/
 │   ├── smoke/         # Comprobación rápida del entorno local levantado
-│   ├── e2e/           # Escenarios integrales con Compose aislado
+│   ├── e2e/           # Escenarios HTTP con Compose aislado
+│   ├── browser/       # Clics y temporizadores de HTMX con Chromium real
+│   ├── monitoring/    # Plataforma local real: métricas, logs, trazas y Grafana
 │   └── observability/ # Contrato común de logs y correlación
 ├── scripts/           # Ejecución E2E, validación OpenAPI y generación de locks
 ├── .github/workflows/ # CI del frontend, backends y pruebas E2E
 ├── tekton/            # Documentación del pipeline previsto; sin recursos todavía
+├── observability/     # Prometheus, Grafana, Alloy, Loki y Tempo en local
 ├── docs/              # Arquitectura, decisiones, OpenAPI y guías operativas
 ├── compose.yaml       # Frontend, tres backends y PostgreSQL para desarrollo local
-└── compose.public.yaml # Ajustes para proxy HTTPS; no configura ni inicia el proxy
+├── compose.public.yaml # Ajustes para proxy HTTPS; no configura ni inicia el proxy
+├── compose.monitoring.yaml # Extensión opcional de Prometheus y Grafana
+├── compose.telemetry.yaml  # Extensión adicional de Alloy, Loki y Tempo
+└── compose.telegram.yaml   # Notificaciones opcionales de Grafana a Telegram
 ```
 
 Cada backend contiene su aplicación, pruebas, dependencias, `Containerfile`,
@@ -117,26 +129,60 @@ movimientos y claves de acreditación. Consulta la
 
 ## Integración local
 
-```bash
-podman compose up --build --detach
-python tests/smoke/check_compose.py
-podman compose down
+Desde una copia local del repositorio, con Docker Desktop iniciado en modo
+contenedores Linux:
+
+```powershell
+if (-not (Test-Path -LiteralPath .env)) {
+    Copy-Item -LiteralPath .env.example -Destination .env
+}
+docker compose -f compose.yaml config --quiet
+docker compose -f compose.yaml up --build --detach
+docker compose -f compose.yaml ps
 ```
 
 El Compose raíz levanta el frontend, PostgreSQL y los tres backends. Abre
 `http://localhost:8000` para usar la aplicación. Consulta la
 [guía de integración local](docs/local-integration.md) para ver puertos,
-configuración, prueba completa y limpieza del volumen.
+configuración, prueba completa y limpieza del volumen. Para comprobar el flujo
+con Python 3.13, `py -3.13 tests/smoke/check_compose.py` crea un pedido de prueba
+en la base local. `docker compose -f compose.yaml down` detiene y conserva datos.
+La guía también describe la alternativa Podman.
+
+Para añadir Prometheus y Grafana locales, con datos persistentes y conexión
+automática a las métricas:
+
+```bash
+docker compose -f compose.yaml -f compose.monitoring.yaml up --build --detach
+```
+
+Grafana está en `http://localhost:3000` y Prometheus en `http://localhost:9090`.
+Las credenciales, consultas y pruebas están en la
+[guía de monitoreo local](docs/local-monitoring.md).
+
+Para recoger también logs y trazas y navegar entre ellos desde Grafana:
+
+```bash
+docker compose -f compose.yaml -f compose.monitoring.yaml -f compose.telemetry.yaml up --build --detach
+```
+
+La [guía de logs y trazas](docs/local-logs-traces.md) explica las consultas,
+persistencia, uso del socket Docker y validación con Chromium.
+
+Grafana también carga los dashboards de **aplicación** y **negocio** y las
+reglas de disponibilidad, errores HTTP y puntos pendientes. La
+[guía de dashboards y alertas](docs/local-dashboards-alerts.md) explica sus
+umbrales, la activación opcional de Telegram y las pruebas de notificaciones.
 
 ## Validación disponible
 
-Requisito: Python 3.11 o posterior. El validador actual solo utiliza la
-biblioteca estándar.
+Usa Python 3.13, la línea acordada para el proyecto. El validador de contratos
+solo utiliza la biblioteca estándar.
 
-```bash
-git clone https://github.com/Migue98/cafeteria-app.git
-cd cafeteria-app
-python scripts/validate_contracts.py
+Desde la raíz:
+
+```powershell
+py -3.13 scripts/validate_contracts.py
 ```
 
 El comando debe finalizar con `Contratos válidos: 3`.
@@ -144,26 +190,37 @@ El comando debe finalizar con `Contratos válidos: 3`.
 Para recorrer el frontend, los tres backends y PostgreSQL de extremo a extremo en un
 Compose aislado:
 
-```bash
-python -m pip install -r tests/requirements.txt
-python scripts/run_e2e.py
+```powershell
+py -3.13 -m venv tests/.venv
+.\tests\.venv\Scripts\python.exe -m pip install --require-hashes -r tests/requirements.txt
+.\tests\.venv\Scripts\python.exe -m playwright install chromium
+.\tests\.venv\Scripts\python.exe scripts/run_e2e.py
 ```
 
-La suite cubre compra, precios, puntos, idempotencia, errores, métricas y
-persistencia tras reiniciar PostgreSQL. Los detalles están en
+Las suites cubren compra, precios, puntos, idempotencia, errores, métricas,
+persistencia tras reiniciar PostgreSQL y clics reales con JavaScript y HTMX
+en Chromium. En Linux, instala el navegador con `--with-deps`.
+Los detalles están en
 [`tests/README.md`](tests/README.md).
 
 Para validar un backend, por ejemplo menú:
 
-```bash
-cd svc-menu
-python -m pip install -r requirements.txt -r requirements-dev.txt
-python -m pytest -p no:cacheprovider
-ruff check app tests
-ruff format --check app tests
+```powershell
+Push-Location svc-menu
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
+.\.venv\Scripts\python.exe -m ruff check app tests ../tests/observability
+.\.venv\Scripts\python.exe -m ruff format --check app tests ../tests/observability
+Pop-Location
 ```
 
 ## Forma de trabajo
+
+Los cuatro componentes comparten las reglas de `ruff.toml` y tienen la misma
+configuración de pytest en su `pyproject.toml`. La
+[guía de herramientas](docs/development-tooling.md) explica la versión de
+Python, la instalación desde locks y los comandos que también usa CI.
 
 1. Crear o elegir un Issue con alcance y criterio de aceptación.
 2. Crear una rama corta desde `main`: `feat/...`, `fix/...`, `docs/...` o
@@ -178,6 +235,7 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 ## Documentación
 
 - [Índice de documentación](docs/README.md)
+- [Entrega y reproducción para el equipo](docs/team-handoff.md)
 - [Plan de implementación](docs/implementation-plan.md)
 - [Plan del software](docs/software-roadmap.md)
 - [Integración local](docs/local-integration.md)
@@ -186,8 +244,19 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
-Revisar la separación de configuración, rutas y servicios y cerrar la
-validación final de la web completa.
+Reproducir la
+[guía de entrega](docs/team-handoff.md) en los equipos de Alicia y Martín a partir
+del commit compartido en `main`, comprobando sus resultados en
+[GitHub Actions](https://github.com/Migue98/cafeteria-app/actions).
+La [revisión visual y de usabilidad](docs/visual-usability-review.md)
+está validada en cinco anchos; las doce pruebas de Chromium cubren carrito,
+compra, historial, teclado, errores y recuperación.
+
+La observabilidad local está implementada y validada: OpenTelemetry,
+Prometheus, Grafana, Alloy, Loki, Tempo, dashboards técnicos y de negocio y
+alertas. La [guía de dashboards y alertas](docs/local-dashboards-alerts.md)
+incluye la extensión opcional de Telegram y la evidencia del envío real desde
+Grafana. Cada equipo debe configurar sus propias credenciales locales.
 Kubernetes, Tekton y GitOps se retomarán al cerrar el desarrollo del software.
 El orden y el estado de los bloques están en el
 [plan del software](docs/software-roadmap.md).

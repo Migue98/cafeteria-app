@@ -21,9 +21,7 @@ class StorefrontService:
     def __init__(self, backend: BackendGateway) -> None:
         self.backend = backend
 
-    def customer_balance(
-        self, identifier: str, *, request_id: str, traceparent: str
-    ) -> int | None:
+    def customer_balance(self, identifier: str, *, request_id: str, traceparent: str) -> int | None:
         try:
             return self.backend.get_balance(
                 customer_id=identifier,
@@ -46,14 +44,10 @@ class StorefrontService:
         cart = read_cart(session)
         if cart:
             checkout_key(session, cart)
-        products = self.backend.list_products(
-            request_id=request_id, traceparent=traceparent
-        )
+        products = self.backend.list_products(request_id=request_id, traceparent=traceparent)
         categories = sorted({product["category"] for product in products})
         visible_products = [
-            product
-            for product in products
-            if category is None or product["category"] == category
+            product for product in products if category is None or product["category"] == category
         ]
         try:
             balance = self.backend.get_balance(
@@ -85,9 +79,7 @@ class StorefrontService:
         request_id: str,
         traceparent: str,
     ) -> dict[str, Any]:
-        products = self.backend.list_products(
-            request_id=request_id, traceparent=traceparent
-        )
+        products = self.backend.list_products(request_id=request_id, traceparent=traceparent)
         if product_id not in {product["id"] for product in products}:
             raise ProductUnavailable("El producto no está disponible.")
         add_item(session, product_id)
@@ -96,24 +88,17 @@ class StorefrontService:
     def current_cart(
         self, session: Session, *, request_id: str, traceparent: str
     ) -> dict[str, Any]:
-        products = self.backend.list_products(
-            request_id=request_id, traceparent=traceparent
-        )
+        products = self.backend.list_products(request_id=request_id, traceparent=traceparent)
         return cart_context(read_cart(session), products)
 
-    def checkout(
-        self, session: Session, *, request_id: str, traceparent: str
-    ) -> dict[str, Any]:
+    def checkout(self, session: Session, *, request_id: str, traceparent: str) -> dict[str, Any]:
         cart = read_cart(session)
         if not cart:
             raise EmptyCart("Agrega al menos un producto antes de confirmar.")
         identifier = customer_id(session)
         order = self.backend.create_order(
             customer_id=identifier,
-            items=[
-                {"product_id": pid, "quantity": qty}
-                for pid, qty in sorted(cart.items())
-            ],
+            items=[{"product_id": pid, "quantity": qty} for pid, qty in sorted(cart.items())],
             idempotency_key=checkout_key(session, cart),
             request_id=request_id,
             traceparent=traceparent,
@@ -145,9 +130,7 @@ class StorefrontService:
                 request_id=request_id,
                 traceparent=traceparent,
             ),
-            "has_pending": any(
-                order["loyalty_status"] == "pending" for order in orders
-            ),
+            "has_pending": any(order["loyalty_status"] == "pending" for order in orders),
         }
 
     def order_points(

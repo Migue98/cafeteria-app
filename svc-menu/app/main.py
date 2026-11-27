@@ -20,7 +20,7 @@ from .models import (
     Product,
     ProductList,
 )
-from .observability import get_logger, install_observability, log_event
+from .observability import Telemetry, create_telemetry, get_logger, install_observability, log_event
 from .repository import (
     PostgresProductRepository,
     ProductRepository,
@@ -75,14 +75,19 @@ def get_repository(request: Request) -> ProductRepository:
 RepositoryDependency = Annotated[ProductRepository, Depends(get_repository)]
 
 
-def create_app(repository: ProductRepository | None = None) -> FastAPI:
+def create_app(
+    repository: ProductRepository | None = None, *, telemetry: Telemetry | None = None
+) -> FastAPI:
     settings = load_settings()
+    telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
     application = FastAPI(
         title="Cafetería - Servicio de menú",
         version="0.1.0",
         description="Catálogo de productos, precios y disponibilidad.",
     )
-    application.state.repository = repository or PostgresProductRepository(settings.database_url)
+    application.state.repository = repository or PostgresProductRepository(
+        settings.database_url, tracer_provider=telemetry.provider
+    )
     application.state.app_version = settings.app_version
 
     def invalid_request_id(request: Request) -> JSONResponse:
@@ -101,6 +106,7 @@ def create_app(repository: ProductRepository | None = None) -> FastAPI:
         requests=HTTP_REQUESTS,
         duration=HTTP_DURATION,
         invalid_response=invalid_request_id,
+        telemetry=telemetry,
     )
 
     @application.exception_handler(RequestValidationError)

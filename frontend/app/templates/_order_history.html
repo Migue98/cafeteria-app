@@ -26,7 +26,7 @@
     <article class="order-card">
       <div class="order-card-heading">
         <div>
-          <span>{{ order.created_at|date_time }}</span>
+          <span><time datetime="{{ order.created_at }}">{{ order.created_at|date_time }}</time></span>
           <h2>Pedido {{ order.id|string|truncate(13, True, '') }}</h2>
         </div>
         <span class="status {% if order.loyalty_status == 'pending' %}status-pending{% endif %}">

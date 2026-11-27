@@ -24,7 +24,7 @@ from .models import (
     PointsBalance,
     Problem,
 )
-from .observability import get_logger, install_observability
+from .observability import Telemetry, create_telemetry, get_logger, install_observability
 from .repository import (
     LoyaltyRepository,
     PostgresLoyaltyRepository,
@@ -121,14 +121,19 @@ def get_repository(request: Request) -> LoyaltyRepository:
 RepositoryDependency = Annotated[LoyaltyRepository, Depends(get_repository)]
 
 
-def create_app(repository: LoyaltyRepository | None = None) -> FastAPI:
+def create_app(
+    repository: LoyaltyRepository | None = None, *, telemetry: Telemetry | None = None
+) -> FastAPI:
     settings = load_settings()
+    telemetry = telemetry or create_telemetry(LOGGER.name, settings.app_version)
     application = FastAPI(
         title="Cafetería - Servicio de lealtad",
         version="0.1.0",
         description="Acreditación idempotente y consulta de puntos.",
     )
-    application.state.repository = repository or PostgresLoyaltyRepository(settings.database_url)
+    application.state.repository = repository or PostgresLoyaltyRepository(
+        settings.database_url, tracer_provider=telemetry.provider
+    )
     application.state.app_version = settings.app_version
 
     def invalid_request_id(request: Request) -> JSONResponse:
@@ -147,6 +152,7 @@ def create_app(repository: LoyaltyRepository | None = None) -> FastAPI:
         requests=HTTP_REQUESTS,
         duration=HTTP_DURATION,
         invalid_response=invalid_request_id,
+        telemetry=telemetry,
     )
 
     @application.exception_handler(RequestValidationError)

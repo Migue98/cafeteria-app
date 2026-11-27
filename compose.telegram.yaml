@@ -1,0 +1,8 @@
+# Añadir después de monitoring y, opcionalmente, telemetry. Grafana usa su integración nativa.
+services:
+  grafana:
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Define TELEGRAM_BOT_TOKEN en el .env local}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:?Define TELEGRAM_CHAT_ID en el .env local}
+    volumes:
+      - ./observability/grafana/alerting/telegram-routing.yaml:/etc/grafana/provisioning/alerting/routing.yaml:ro

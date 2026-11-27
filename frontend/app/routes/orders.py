@@ -24,9 +24,7 @@ def checkout(
             traceparent=request.state.traceparent,
         )
     except EmptyCart as exc:
-        return render_home(
-            request, service, templates, checkout_error=str(exc), status_code=400
-        )
+        return render_home(request, service, templates, checkout_error=str(exc), status_code=400)
     except BackendError as exc:
         return render_home(
             request,

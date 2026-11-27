@@ -6,6 +6,8 @@ from time import perf_counter
 from typing import Protocol
 
 import httpx
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.trace import TracerProvider
 
 from .models import LoyaltyAward, MenuProduct, Order
 
@@ -54,14 +56,25 @@ def _validate_health(response: httpx.Response) -> None:
 
 
 class HttpMenuClient:
-    def __init__(self, base_url: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float,
+        *,
+        tracer_provider: TracerProvider | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
+        self._client = httpx.Client(timeout=timeout_seconds)
+        HTTPXClientInstrumentor.instrument_client(self._client, tracer_provider=tracer_provider)
+
+    def close(self) -> None:
+        self._client.close()
 
     def health(self, *, request_id: str, traceparent: str) -> float:
         started = perf_counter()
         try:
-            response = httpx.get(
+            response = self._client.get(
                 f"{self._base_url}/health",
                 headers=_headers(request_id, traceparent),
                 timeout=self._timeout,
@@ -79,7 +92,7 @@ class HttpMenuClient:
         traceparent: str,
     ) -> MenuProduct | None:
         try:
-            response = httpx.get(
+            response = self._client.get(
                 f"{self._base_url}/api/v1/products/{product_id}",
                 headers=_headers(request_id, traceparent),
                 timeout=self._timeout,
@@ -100,14 +113,25 @@ class HttpMenuClient:
 
 
 class HttpLoyaltyClient:
-    def __init__(self, base_url: str, timeout_seconds: float) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        timeout_seconds: float,
+        *,
+        tracer_provider: TracerProvider | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
+        self._client = httpx.Client(timeout=timeout_seconds)
+        HTTPXClientInstrumentor.instrument_client(self._client, tracer_provider=tracer_provider)
+
+    def close(self) -> None:
+        self._client.close()
 
     def health(self, *, request_id: str, traceparent: str) -> float:
         started = perf_counter()
         try:
-            response = httpx.get(
+            response = self._client.get(
                 f"{self._base_url}/health",
                 headers=_headers(request_id, traceparent),
                 timeout=self._timeout,
@@ -127,7 +151,7 @@ class HttpLoyaltyClient:
         headers = _headers(request_id, traceparent)
         headers["Idempotency-Key"] = str(order.id)
         try:
-            response = httpx.post(
+            response = self._client.post(
                 f"{self._base_url}/api/v1/points/earn",
                 headers=headers,
                 json={

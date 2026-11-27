@@ -1,0 +1,101 @@
+# Se añade a compose.yaml + compose.monitoring.yaml para activar logs y trazas.
+x-telemetry-environment: &telemetry-environment
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://alloy:4318
+  OTEL_BSP_SCHEDULE_DELAY: ${OTEL_BSP_SCHEDULE_DELAY:-1000}
+
+services:
+  frontend:
+    environment:
+      <<: *telemetry-environment
+    depends_on:
+      alloy:
+        condition: service_started
+  svc-menu:
+    environment:
+      <<: *telemetry-environment
+    depends_on:
+      alloy:
+        condition: service_started
+  svc-pedidos:
+    environment:
+      <<: *telemetry-environment
+    depends_on:
+      alloy:
+        condition: service_started
+  svc-lealtad:
+    environment:
+      <<: *telemetry-environment
+    depends_on:
+      alloy:
+        condition: service_started
+
+  telemetry-storage-init:
+    image: docker.io/grafana/alloy:v1.22.0@sha256:9acc2529bc1edb7f5b2bd801dd8334ebc80c158e3a9e5526ecd7c9a273d43189
+    user: "0:0"
+    entrypoint: [/usr/bin/chown, "10001:10001", /loki, /var/tempo]
+    volumes:
+      - cafeteria-loki-data:/loki
+      - cafeteria-tempo-data:/var/tempo
+    restart: "no"
+    mem_limit: 64m
+
+  loki:
+    image: docker.io/grafana/loki:3.7.10@sha256:b43c257ccfc925d4a50b8717cac61a3b51df8c48d01847936057e5c4075a24a7
+    command: [-config.file=/etc/loki/local.yaml]
+    volumes:
+      - ./observability/loki/local.yaml:/etc/loki/local.yaml:ro
+      - cafeteria-loki-data:/loki
+    ports:
+      - "127.0.0.1:${LOKI_PORT:-3100}:3100"
+    depends_on:
+      telemetry-storage-init:
+        condition: service_completed_successfully
+    mem_limit: 512m
+    stop_grace_period: 45s
+
+  tempo:
+    image: docker.io/grafana/tempo:3.1.1@sha256:64e2fbd56d9c2b3412a4b430a58ea59e91a670b1e75f920a0c702213ad145044
+    command: [-config.file=/etc/tempo/local.yaml, -target=all]
+    volumes:
+      - ./observability/tempo/local.yaml:/etc/tempo/local.yaml:ro
+      - cafeteria-tempo-data:/var/tempo
+    ports:
+      - "127.0.0.1:${TEMPO_PORT:-3200}:3200"
+    depends_on:
+      telemetry-storage-init:
+        condition: service_completed_successfully
+    mem_limit: 1g
+    stop_grace_period: 45s
+
+  alloy:
+    image: docker.io/grafana/alloy:v1.22.0@sha256:9acc2529bc1edb7f5b2bd801dd8334ebc80c158e3a9e5526ecd7c9a273d43189
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - --disable-reporting
+      - /etc/alloy/config.alloy
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro
+      - cafeteria-alloy-data:/var/lib/alloy/data
+    ports:
+      - "127.0.0.1:${ALLOY_PORT:-12345}:12345"
+    depends_on:
+      loki:
+        condition: service_started
+      tempo:
+        condition: service_started
+    mem_limit: 384m
+
+  grafana:
+    volumes:
+      - ./observability/grafana/telemetry-datasources.yaml:/etc/grafana/provisioning/datasources/telemetry.yaml:ro
+
+volumes:
+  cafeteria-loki-data:
+  cafeteria-tempo-data:
+  cafeteria-alloy-data:

@@ -22,9 +22,7 @@ def test_invalid_balance_response_is_a_controlled_backend_error(monkeypatch, pay
     )
     try:
         with pytest.raises(BackendError) as failure:
-            gateway.get_balance(
-                customer_id="11111111-1111-4111-8111-111111111111", **CONTEXT
-            )
+            gateway.get_balance(customer_id="11111111-1111-4111-8111-111111111111", **CONTEXT)
         assert failure.value.status_code == 502
         assert failure.value.code == "INVALID_BACKEND_RESPONSE"
     finally:

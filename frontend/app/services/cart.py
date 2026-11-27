@@ -45,9 +45,7 @@ def save_cart(session: Session, cart: dict[int, int]) -> None:
         session.pop("checkout_attempt", None)
 
 
-def cart_context(
-    cart: dict[int, int], products: list[dict[str, Any]]
-) -> dict[str, Any]:
+def cart_context(cart: dict[int, int], products: list[dict[str, Any]]) -> dict[str, Any]:
     product_map = {product["id"]: product for product in products}
     rows = []
     for product_id, quantity in sorted(cart.items()):

@@ -31,6 +31,9 @@ existente; los cambios de esquema necesitan una migración explícita.
 
 ## Iniciar
 
+Para una copia nueva, usa la [guía de entrega al equipo](team-handoff.md), que
+incluye requisitos, creación del `.env` y comandos completos de pruebas.
+
 Con Podman:
 
 ```bash
@@ -75,16 +78,21 @@ La prueba verifica:
 El smoke test es una comprobación rápida sobre el entorno ya levantado. La
 suite E2E automatizada crea su propio proyecto Compose y volumen aislados:
 
-```bash
-python -m pip install -r tests/requirements.txt
-python scripts/run_e2e.py
-```
+Prepara `tests/.venv`, instala los locks y Chromium y ejecuta
+`scripts/run_e2e.py` con ese entorno. Los comandos completos están en
+[`tests/README.md`](../tests/README.md#ejecución).
 
 Además del recorrido anterior, la suite comprueba validaciones, productos
 inexistentes y no disponibles, conflictos de idempotencia y persistencia tras
 reiniciar PostgreSQL. Consulta [`tests/README.md`](../tests/README.md).
 
 ## Detener y limpiar
+
+El [Compose opcional de monitoreo](local-monitoring.md) añade Prometheus y
+Grafana con sus propios volúmenes. Conserva todos los archivos y su orden al
+iniciar y detener: también `compose.telemetry.yaml` y `compose.telegram.yaml`
+si los utilizaste. La [guía de entrega](team-handoff.md#3-elegir-observabilidad)
+resume las combinaciones.
 
 Conservar los datos locales:
 

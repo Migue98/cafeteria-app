@@ -48,9 +48,14 @@ La prueba integral
 restaura lealtad y comprueba los fragmentos actualizados. También confirma que
 solo exista un pedido y una acreditación de puntos.
 
+Además, los casos de `tests/browser/` automatizan la recuperación del recibo
+y del historial con Chromium real: dejan pasar el temporizador de HTMX,
+comprueban el cambio visible sin recargar y contrastan los movimientos con
+PostgreSQL. Consulta la [guía de pruebas de navegador](browser-testing.md).
+
 ```powershell
 # Desde frontend, con sus dependencias de desarrollo instaladas:
-python -m pytest tests ../tests/observability -p no:cacheprovider
+python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
 
 # Desde la raíz, con tests/requirements.txt instalado:
 python scripts/run_e2e.py

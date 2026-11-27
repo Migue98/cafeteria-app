@@ -51,7 +51,7 @@ Levanta PostgreSQL con Compose y ejecuta FastAPI desde un entorno virtual:
 
 ```bash
 cd svc-menu
-python -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate  # En PowerShell: .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt -r requirements-dev.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
@@ -67,9 +67,15 @@ La configuración disponible es:
 ## Validación
 
 ```bash
-python -m pytest
-ruff check .
+python -m pytest -c pyproject.toml tests ../tests/observability -p no:cacheprovider
+ruff check app tests ../tests/observability
+ruff format --check app tests ../tests/observability
 ```
+
+La configuración de pytest está en `pyproject.toml`; Ruff hereda las reglas
+comunes de `../ruff.toml`. En Windows se crea el entorno con
+`py -3.13 -m venv .venv`. Consulta la
+[guía de herramientas](../docs/development-tooling.md).
 
 Las pruebas HTTP usan un repositorio falso; no necesitan PostgreSQL. La
 integración real con PostgreSQL se valida al ejecutar `compose.yaml`.

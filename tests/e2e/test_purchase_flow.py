@@ -81,9 +81,7 @@ def test_complete_purchase_uses_menu_prices_and_awards_points(api: ApiClient) ->
         f"{api.orders_url}/api/v1/orders",
         query={"customer_id": customer_id},
     )
-    balance = api.json(
-        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
-    )
+    balance = api.json("GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points")
     assert fetched.status == 200 and fetched.body["id"] == created.body["id"]
     assert listed.status == 200 and listed.body["total"] == 1
     assert balance.status == 200 and balance.body["balance"] == 10
@@ -133,6 +131,7 @@ def test_checkout_trace_links_all_four_services(
     frontend_span = receipt.headers["traceparent"].split("-")[2]
 
     events = []
+    spans = {}
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
         logs = subprocess.run(
@@ -152,22 +151,37 @@ def test_checkout_trace_links_all_four_services(
             encoding="utf-8",
         )
         events = []
+        spans = {}
         for line in logs.stdout.splitlines():
             try:
                 event = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if (
-                event.get("trace_id") == trace_id
-                and event.get("message") == "request_completed"
-            ):
+            if event.get("context", {}).get("trace_id") == f"0x{trace_id}":
+                spans[event["context"]["span_id"][2:]] = event
+            if event.get("trace_id") == trace_id and event.get("message") == "request_completed":
                 events.append(event)
-        if {event["service"] for event in events} == {
-            "frontend",
-            "svc-menu",
-            "svc-pedidos",
-            "svc-lealtad",
-        }:
+        if (
+            {event["service"] for event in events}
+            == {
+                "frontend",
+                "svc-menu",
+                "svc-pedidos",
+                "svc-lealtad",
+            }
+            and {
+                span["resource"]["attributes"]["service.name"]
+                for span in spans.values()
+                if span["attributes"].get("db.system") == "postgresql"
+                or span["attributes"].get("db.system.name") == "postgresql"
+            }
+            == {
+                "svc-menu",
+                "svc-pedidos",
+                "svc-lealtad",
+            }
+            and all(event["span_id"] in spans for event in events)
+        ):
             break
         time.sleep(0.2)
 
@@ -178,23 +192,48 @@ def test_checkout_trace_links_all_four_services(
     assert all(by_service.values()), events
     frontend_event = by_service["frontend"][0]
     order_event = next(
-        event
-        for event in by_service["svc-pedidos"]
-        if event["route"] == "/api/v1/orders"
+        event for event in by_service["svc-pedidos"] if event["route"] == "/api/v1/orders"
     )
     assert frontend_event["span_id"] == frontend_span
     assert frontend_event["parent_span_id"] == parent_span
-    assert order_event["parent_span_id"] == frontend_span
-    assert any(
-        event["parent_span_id"] == order_event["span_id"]
-        for event in by_service["svc-menu"]
-    )
-    award = next(
+
+    def assert_http_hop(server_event, parent_server_id):
+        server_span = spans[server_event["span_id"]]
+        client_span = spans[server_event["parent_span_id"]]
+        assert server_span["kind"] == "SpanKind.SERVER"
+        assert server_span["parent_id"] == client_span["context"]["span_id"]
+        assert client_span["kind"] == "SpanKind.CLIENT"
+        assert client_span["parent_id"] == f"0x{parent_server_id}"
+        assert server_span["end_time"] > server_span["start_time"]
+
+    assert_http_hop(order_event, frontend_span)
+    menu_event = next(
         event
-        for event in by_service["svc-lealtad"]
-        if event["route"] == "/api/v1/points/earn"
+        for event in by_service["svc-menu"]
+        if event["route"] == "/api/v1/products/{product_id}"
     )
-    assert award["parent_span_id"] == order_event["span_id"]
+    assert_http_hop(menu_event, order_event["span_id"])
+    award = next(
+        event for event in by_service["svc-lealtad"] if event["route"] == "/api/v1/points/earn"
+    )
+    assert_http_hop(award, order_event["span_id"])
+    for server_event in [order_event, menu_event, award]:
+        sql_spans = [
+            span
+            for span in spans.values()
+            if span["parent_id"] == f"0x{server_event['span_id']}"
+            and (
+                span["attributes"].get("db.system") == "postgresql"
+                or span["attributes"].get("db.system.name") == "postgresql"
+            )
+        ]
+        assert sql_spans, server_event
+        assert all(span["kind"] == "SpanKind.CLIENT" for span in sql_spans)
+        assert all(span["end_time"] > span["start_time"] for span in sql_spans)
+        assert all(
+            span["resource"]["attributes"]["service.name"] == server_event["service"]
+            for span in sql_spans
+        )
     assert len({event["span_id"] for event in events}) == len(events)
     for event in events:
         assert event["request_id"] == request_id
@@ -216,9 +255,7 @@ def test_order_idempotency_does_not_duplicate_order_or_points(api: ApiClient) ->
         f"{api.orders_url}/api/v1/orders",
         query={"customer_id": customer_id},
     )
-    balance = api.json(
-        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
-    )
+    balance = api.json("GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points")
 
     assert first.status == 201
     assert replay.status == 200
@@ -294,9 +331,7 @@ def test_metrics_expose_business_and_http_signals(api: ApiClient) -> None:
             assert metric in response.body
 
 
-def test_pending_loyalty_recovers_automatically(
-    api: ApiClient, compose_command: list[str]
-) -> None:
+def test_pending_loyalty_recovers_automatically(api: ApiClient, compose_command: list[str]) -> None:
     customer_id = str(uuid4())
     subprocess.run(
         [*compose_command, "stop", "svc-lealtad"],
@@ -320,9 +355,7 @@ def test_pending_loyalty_recovers_automatically(
     deadline = time.monotonic() + 20
     fetched = None
     while time.monotonic() < deadline:
-        fetched = api.json(
-            "GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}"
-        )
+        fetched = api.json("GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}")
         if fetched.status == 200 and fetched.body["loyalty_status"] == "awarded":
             break
         time.sleep(0.5)
@@ -331,9 +364,7 @@ def test_pending_loyalty_recovers_automatically(
     assert fetched.status == 200
     assert fetched.body["loyalty_status"] == "awarded"
     assert fetched.body["points_earned"] == 7
-    balance = api.json(
-        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
-    )
+    balance = api.json("GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points")
     assert balance.status == 200
     assert balance.body["balance"] == 7
 
@@ -383,9 +414,7 @@ def test_browser_history_survives_loyalty_outage_and_refreshes(
     assert refreshed.status == 200
     assert "+7 puntos" in refreshed.body
     assert 'hx-trigger="every 15s"' not in refreshed.body
-    history = browser.request(
-        "GET", f"{api.frontend_url}/orders", headers={"HX-Request": "true"}
-    )
+    history = browser.request("GET", f"{api.frontend_url}/orders", headers={"HX-Request": "true"})
     assert "Puntos acreditados" in history.body
     assert "Saldo no disponible" not in history.body
     assert 'hx-trigger="every 15s"' not in history.body
@@ -397,16 +426,12 @@ def test_browser_history_survives_loyalty_outage_and_refreshes(
         f"{api.orders_url}/api/v1/orders",
         query={"customer_id": order["customer_id"]},
     )
-    balance = api.json(
-        "GET", f"{api.loyalty_url}/api/v1/customers/{order['customer_id']}/points"
-    )
+    balance = api.json("GET", f"{api.loyalty_url}/api/v1/customers/{order['customer_id']}/points")
     assert listed.body["total"] == 1
     assert balance.body["balance"] == 7
 
 
-def test_data_survives_postgres_restart(
-    api: ApiClient, compose_command: list[str]
-) -> None:
+def test_data_survives_postgres_restart(api: ApiClient, compose_command: list[str]) -> None:
     customer_id = str(uuid4())
     created = create_order(api, order_payload(customer_id, quantity=1))
     assert created.status == 201
@@ -421,8 +446,6 @@ def test_data_survives_postgres_restart(
     api.wait_until_healthy(timeout_seconds=90)
 
     fetched = api.json("GET", f"{api.orders_url}/api/v1/orders/{order_id}")
-    balance = api.json(
-        "GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points"
-    )
+    balance = api.json("GET", f"{api.loyalty_url}/api/v1/customers/{customer_id}/points")
     assert fetched.status == 200 and fetched.body["id"] == order_id
     assert balance.status == 200 and balance.body["balance"] == 3

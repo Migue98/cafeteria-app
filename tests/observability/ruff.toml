@@ -1,5 +1,1 @@
-line-length = 88
-target-version = "py313"
-
-[lint]
-select = ["E", "F", "I", "UP", "B", "SIM"]
+extend = "../../ruff.toml"

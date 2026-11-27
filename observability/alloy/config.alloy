@@ -1,0 +1,110 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+discovery.docker "cafeteria" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "5s"
+  filter {
+    name   = "label"
+    values = ["com.docker.compose.project=" + sys.env("COMPOSE_PROJECT_NAME")]
+  }
+}
+
+discovery.relabel "cafeteria" {
+  targets = discovery.docker.cafeteria.targets
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "frontend|svc-menu|svc-pedidos|svc-lealtad"
+    action        = "keep"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+  rule {
+    target_label = "job"
+    replacement  = "cafeteria"
+  }
+}
+
+loki.source.docker "cafeteria" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.cafeteria.output
+  labels     = {}
+  forward_to = [loki.process.cafeteria.receiver]
+}
+
+loki.process "cafeteria" {
+  stage.json {
+    expressions = {
+      level      = "level",
+      timestamp  = "timestamp",
+      trace_id   = "trace_id",
+      span_id    = "span_id",
+      request_id = "request_id",
+    }
+  }
+  stage.labels {
+    values = { level = "" }
+  }
+  stage.structured_metadata {
+    values = {
+      trace_id   = "",
+      span_id    = "",
+      request_id = "",
+    }
+  }
+  stage.timestamp {
+    source            = "timestamp"
+    format            = "RFC3339Nano"
+    action_on_failure = "skip"
+  }
+  forward_to = [loki.write.cafeteria.receiver]
+}
+
+loki.write "cafeteria" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+otelcol.receiver.otlp "cafeteria" {
+  http {
+    endpoint = "0.0.0.0:4318"
+  }
+  output {
+    traces = [otelcol.processor.batch.cafeteria.input]
+  }
+}
+
+otelcol.processor.batch "cafeteria" {
+  timeout             = "1s"
+  send_batch_size     = 256
+  send_batch_max_size = 512
+  output {
+    traces = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = "http://tempo:4318"
+  }
+  sending_queue {
+    enabled       = true
+    queue_size    = 256
+    num_consumers = 2
+  }
+  retry_on_failure {
+    enabled          = true
+    initial_interval = "1s"
+    max_interval     = "10s"
+    max_elapsed_time = "60s"
+  }
+}

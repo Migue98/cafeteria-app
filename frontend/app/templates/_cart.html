@@ -2,10 +2,11 @@
   <div class="cart-heading">
     <div>
       <p class="eyebrow eyebrow-dark">Tu selección</p>
-      <h2 id="cart-title">Carrito</h2>
+      <h2 id="cart-title" tabindex="-1">Carrito</h2>
     </div>
     <span class="cart-count" aria-label="{{ cart_count }} productos">{{ cart_count }}</span>
   </div>
+  <div class="cart-feedback" id="cart-feedback" aria-live="polite"></div>
 
   {% if cart_rows %}
   <div class="cart-items">
@@ -18,23 +19,23 @@
       <div class="quantity-controls" aria-label="Cantidad de {{ row.name }}">
         <form method="post" action="/cart/items/{{ row.id }}/decrement"
               hx-post="/cart/items/{{ row.id }}/decrement"
-              hx-target="#cart-panel" hx-swap="outerHTML">
+              hx-target="#cart-panel" hx-swap="outerHTML" hx-disabled-elt="find button">
           <input type="hidden" name="csrf_token" value="{{ request.session['csrf_token'] }}">
-          <button type="submit" aria-label="Quitar uno de {{ row.name }}">−</button>
+          <button id="cart-decrement-{{ row.id }}" type="submit" aria-label="Quitar uno de {{ row.name }}">−</button>
         </form>
         <strong>{{ row.quantity }}</strong>
         <form method="post" action="/cart/items/{{ row.id }}"
               hx-post="/cart/items/{{ row.id }}"
-              hx-target="#cart-panel" hx-swap="outerHTML">
+              hx-target="#cart-panel" hx-swap="outerHTML" hx-disabled-elt="find button">
           <input type="hidden" name="csrf_token" value="{{ request.session['csrf_token'] }}">
-          <button type="submit" aria-label="Agregar otro {{ row.name }}">+</button>
+          <button id="cart-increment-{{ row.id }}" type="submit" aria-label="Agregar otro {{ row.name }}">+</button>
         </form>
       </div>
       <form class="remove-form" method="post" action="/cart/items/{{ row.id }}/remove"
             hx-post="/cart/items/{{ row.id }}/remove"
-            hx-target="#cart-panel" hx-swap="outerHTML">
+            hx-target="#cart-panel" hx-swap="outerHTML" hx-disabled-elt="find button">
         <input type="hidden" name="csrf_token" value="{{ request.session['csrf_token'] }}">
-        <button type="submit">Eliminar</button>
+        <button id="cart-remove-{{ row.id }}" type="submit">Eliminar</button>
       </form>
     </article>
     {% endfor %}
