@@ -1,31 +1,26 @@
 # Tekton
 
-Estado: diseño preparado; todavía no hay Tasks, Pipelines ni Triggers implementados.
-El [plan de CI/CD](../docs/tekton-ci-cd.md) describe las etapas, las credenciales,
-la condición de aprobación E2E y el contrato con GitOps.
+Estado: planeación actualizada el 27 de noviembre de 2026. Todavía no hay Tasks,
+Pipeline ni Triggers implementados para la cafetería.
 
-Recorrido previsto:
+El [plan de trabajo](../docs/implementation-plan.md) incorpora las clases del
+profesor; el [plan de CI/CD](../docs/tekton-ci-cd.md) precisa las tareas y resultados.
 
 ```text
-push a main → webhook → clonar SHA → contratos y pruebas
-             → exigir E2E del mismo SHA → construir y publicar 4 imágenes
-             → actualizar GitOps → Argo CD sincroniza
+push a main → webhook firmado → Tekton: clonar SHA, validar y probar
+            → construir/publicar cuatro imágenes SHA y digests
+            → actualizar cafeteria-gitops → Argo CD sincroniza
 ```
 
-Recursos por implementar:
+Las pruebas de integración y Chromium se ejecutarán desde Tekton. El diseño
+anterior `wait-e2e`, dependiente de GitHub Actions, se sustituye por
+`integration-tests` y un entorno aislado. Actions permanece como apoyo al desarrollo.
 
-- Task de clonación.
-- Tasks de validación OpenAPI y pruebas por componente.
-- Task que comprueba la aprobación E2E del mismo commit en GitHub Actions.
-- Task de construcción y publicación con Buildah.
-- Task de actualización del repositorio GitOps.
-- Pipeline y ejemplo de PipelineRun manual de validación.
-- TriggerBinding, TriggerTemplate y EventListener para GitHub.
-- ServiceAccounts y permisos de ejecución.
+Preparar Tasks de clonación, contratos, pruebas Python, integración, build/push,
+actualización GitOps y limpieza; Pipeline, PipelineRun manual, Triggers y RBAC.
+La demo del profesor aporta workspace NFS, Task/Pipeline y `IMAGE_DIGEST`;
+se adapta a cuatro Containerfiles y dos repositorios.
 
-Primero se validará la ejecución manual de clonación y pruebas; después se
-añadirán publicación, GitOps y webhook. La versión de Tekton, la StorageClass
-y el contexto de seguridad del builder se acordarán con el clúster real.
-
-Las credenciales se crearán como Secrets del clúster y nunca se incluirán aquí.
-Preparar estos archivos no instala componentes ni modifica el clúster.
+Siguiente paso: confirmar versiones, StorageClass y permisos con plataforma y
+preparar el PipelineRun manual de clonación y validación. Los detalles de E2E y
+builder se cierran antes de ampliar el pipeline. Secrets reales fuera de Git.

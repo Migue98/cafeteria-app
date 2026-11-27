@@ -10,7 +10,8 @@
 | [Revisión visual y de usabilidad](visual-usability-review.md) | Escritorio y móvil, navegación, teclado, carga, errores y evidencia de las correcciones. |
 | [Plan de CI/CD con Tekton](tekton-ci-cd.md) | Pipeline por etapas, pruebas, publicación, webhook y contrato con GitOps. |
 | [Especificación](application-specification.md) | Funciones, microservicios, persistencia y alcance. |
-| [Plan de implementación](implementation-plan.md) | Fases y orden de trabajo. |
+| [Contrato de salud](health-contract.md) | Diseño de /livez y /readyz, dependencias críticas, compatibilidad con /health y aceptación; implementación pendiente. |
+| [Plan de trabajo actualizado](implementation-plan.md) | Ocho pasos, clases 2–4, responsables por frente y aceptación de Tekton, Argo CD, datos y observabilidad. |
 | [Plan del software](software-roadmap.md) | Bloques completados y orden pendiente antes de integrar infraestructura. |
 | [Inventario de dependencias](dependency-inventory.md) | Versiones declaradas e instaladas antes del bloqueo reproducible. |
 | [Validación de locks](dependency-lock-validation.md) | Evidencia de instalaciones limpias, pruebas y builds reproducibles. |

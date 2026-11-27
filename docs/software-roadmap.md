@@ -1,5 +1,11 @@
 # Plan del software
 
+El desarrollo del MVP está publicado y su CI de Actions aprobó `1eec563`.
+La fase vigente es la integración de plataforma y CI/CD con Tekton y Argo CD,
+según el [plan de trabajo actualizado](implementation-plan.md) del 27 de noviembre.
+Los estados locales de las tablas siguientes conservan la evidencia de cada paso;
+no representan una implementación terminada de la plataforma Kubernetes.
+
 La infraestructura se coordina por separado con el compañero responsable. Este
 orden recoge los bloques de desarrollo acordados para cerrar la aplicación
 antes de integrarla al despliegue público.
@@ -17,7 +23,7 @@ antes de integrarla al despliegue público.
 | 9 | Organización de carpetas y documentación | Integrado en `ff37cd4`; los esqueletos antiguos de la materia se retiraron en `1361737`. |
 | 10 | Separación de rutas y lógica de negocio de `main.py` | Integrado en `ef9c9d3`, con pruebas locales y E2E aprobadas. |
 | 11 | Validación final del software web y observabilidad local | Implementado, validado y documentado; falta reproducción en los otros equipos. El estado remoto se comprueba en Actions para el commit compartido. |
-| 12 | Integración con infraestructura, Kubernetes y GitOps | Se retomará al terminar el desarrollo de la web. |
+| 12 | Integración con infraestructura, Kubernetes, Tekton y GitOps | Siguiente fase: ocho pasos en el plan actualizado con las clases 2, 3 y 4. |
 
 ## Cierre del software por pasos
 
@@ -69,7 +75,20 @@ salud HTTP. Los seis workflows admiten también ejecución manual desde Actions.
 La regresión completa local aprobó 31 casos HTTP en 144.56 segundos y 12 casos
 Chromium en 79.59 segundos, con limpieza automática del entorno aislado.
 
-## Observabilidad local antes de la revisión visual
+## Preparación del software para GitOps — seis pasos
+
+Esta secuencia es distinta de los ocho pasos de integración del plan general.
+
+| Paso | Trabajo | Estado |
+|---|---|---|
+| 1 | Definir el contrato de salud. | Definido en [health-contract.md](health-contract.md): dependencias, respuestas, tiempos y aceptación. Rutas nuevas pendientes de implementar. |
+| 2 | Implementar las probes y actualizar OpenAPI/pruebas. | Pendiente. |
+| 3 | Ordenar inicialización y migraciones de BD. | Pendiente. |
+| 4 | Crear los manifiestos GitOps. | Pendiente. |
+| 5 | Preparar las pruebas para Tekton. | Pendiente. |
+| 6 | Conectar Tekton, GitOps y Argo CD. | Pendiente. |
+
+## Evidencia del bloque de observabilidad local
 
 Este bloque se incorpora antes de retomar el paso 3 de cierre de la web.
 Completar logs y métricas no equivale a tener la plataforma de observabilidad.

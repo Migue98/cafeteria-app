@@ -244,6 +244,11 @@ No se versionan tokens, contraseñas, kubeconfigs, llaves privadas ni archivos
 
 ## Siguiente hito
 
+Seguir el [plan de trabajo actualizado](docs/implementation-plan.md): acordar el
+contrato con infraestructura y preparar el primer PipelineRun manual de Tekton.
+El plan incorpora almacenamiento de clase 2, monitoreo de clase 3 y GitOps de
+clase 4, con criterios verificables hasta la presentación del 4 de diciembre.
+
 Reproducir la
 [guía de entrega](docs/team-handoff.md) en los equipos de Alicia y Martín a partir
 del commit compartido en `main`, comprobando sus resultados en
@@ -257,6 +262,7 @@ Prometheus, Grafana, Alloy, Loki, Tempo, dashboards técnicos y de negocio y
 alertas. La [guía de dashboards y alertas](docs/local-dashboards-alerts.md)
 incluye la extensión opcional de Telegram y la evidencia del envío real desde
 Grafana. Cada equipo debe configurar sus propias credenciales locales.
-Kubernetes, Tekton y GitOps se retomarán al cerrar el desarrollo del software.
+Kubernetes, Tekton y GitOps son la fase vigente del proyecto; su implementación
+y ejecución en el clúster siguen pendientes.
 El orden y el estado de los bloques están en el
 [plan del software](docs/software-roadmap.md).

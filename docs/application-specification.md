@@ -24,11 +24,15 @@ Cada servicio tendrá su propio Containerfile, imagen de Docker Hub, Deployment 
 Todos los backends expondrán:
 
 ```text
-GET /health   # liveness y readiness
+GET /health   # diagnóstico actual de dependencias
 GET /metrics  # formato Prometheus
 ```
 
 También tendrán logs JSON en stdout con `timestamp`, `level`, `service`, `message`, `trace_id` y `span_id`. Los errores HTTP no incluirán trazas internas ni credenciales.
+
+La adaptación a Kubernetes separará `GET /livez` y `GET /readyz`, manteniendo
+`/health`. El [contrato de salud](health-contract.md) define el diseño para los
+cuatro componentes; su implementación corresponde al paso 2 de preparación.
 
 Cuando `svc-lealtad` no esté disponible, `svc-pedidos` conservará el pedido con
 `loyalty_status=pending`. Un trabajador ejecutará un lote al iniciar y cada 15

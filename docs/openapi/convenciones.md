@@ -74,6 +74,12 @@ El cliente decide por `status` y `code`, nunca analizando el texto de `detail`. 
 
 ## Salud
 
+El diseño de liveness/readiness separadas y su matriz de dependencias están en
+el [contrato de salud](../health-contract.md). Es el objetivo del siguiente
+cambio; `/livez` y `/readyz` no están disponibles todavía. Esta sección describe
+el diagnóstico actual de los backends; el frontend conserva HTTP 200 con
+`degraded` cuando falla alguno de sus backends.
+
 `GET /health` devuelve:
 
 - `200`: el servicio puede atender su función principal; puede indicar `degraded` si falla una dependencia no crítica.
