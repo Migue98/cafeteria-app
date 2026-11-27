@@ -28,10 +28,16 @@ def outage(api: ApiClient, compose_command):
             )
             yield
         finally:
+            # Las dependencias pueden conservar un healthcheck degradado tras una pausa.
+            # Restaura solo el contenedor interrumpido y comprueba después la salud real.
+            restore = (
+                ["unpause", service]
+                if paused
+                else ["up", "--detach", "--no-deps", "--no-recreate", service]
+            )
             subprocess.run(
-                [*compose_command, "unpause" if paused else "start", service],
+                [*compose_command, *restore],
                 check=True,
-                capture_output=True,
             )
             api.wait_until_healthy(timeout_seconds=90)
 
@@ -61,9 +67,7 @@ def assert_problem(result, code="DEPENDENCY_UNAVAILABLE"):
 
 
 def assert_one_purchase(api, customer_id, *, points, loyalty_snapshot):
-    listed = api.json(
-        "GET", f"{api.orders_url}/api/v1/orders", query={"customer_id": customer_id}
-    )
+    listed = api.json("GET", f"{api.orders_url}/api/v1/orders", query={"customer_id": customer_id})
     assert listed.status == 200
     assert listed.body["total"] == 1
     snapshot = loyalty_snapshot(customer_id)
@@ -79,9 +83,7 @@ def finish_browser_purchase(api, browser, loyalty_snapshot):
     assert "$35.00" in response.body
     order_id = re.search(r'data-order-id="([0-9a-f-]{36})"', response.body)[1]
     order = api.json("GET", f"{api.orders_url}/api/v1/orders/{order_id}").body
-    assert_one_purchase(
-        api, order["customer_id"], points=3, loyalty_snapshot=loyalty_snapshot
-    )
+    assert_one_purchase(api, order["customer_id"], points=3, loyalty_snapshot=loyalty_snapshot)
 
 
 @pytest.mark.parametrize("paused", [False, True], ids=["stopped", "read-timeout"])
@@ -118,9 +120,7 @@ def test_menu_failure_rejects_purchase_and_recovers_without_losing_cart(
     assert empty.body["total"] == 0
     assert loyalty_snapshot(failed_customer)["movement_count"] == 0
     assert purchase(api, failed_customer, key).status == 201
-    assert_one_purchase(
-        api, failed_customer, points=7, loyalty_snapshot=loyalty_snapshot
-    )
+    assert_one_purchase(api, failed_customer, points=7, loyalty_snapshot=loyalty_snapshot)
     finish_browser_purchase(api, browser, loyalty_snapshot)
 
 
@@ -164,9 +164,7 @@ def test_postgres_outage_reports_503_and_restores_data_without_restart_of_apps(
         for url in (api.menu_url, api.orders_url, api.loyalty_url):
             assert_problem(api.json("GET", f"{url}/health", timeout=10))
             assert api.text(f"{url}/metrics").status == 200
-        assert_problem(
-            api.json("GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}")
-        )
+        assert_problem(api.json("GET", f"{api.orders_url}/api/v1/orders/{created.body['id']}"))
         assert_problem(purchase(api, failed_customer, key))
         health = api.json("GET", f"{api.frontend_url}/health", timeout=20)
         assert health.status == 200
@@ -185,9 +183,7 @@ def test_postgres_outage_reports_503_and_restores_data_without_restart_of_apps(
     )
     assert empty.body["total"] == 0
     assert purchase(api, failed_customer, key).status == 201
-    assert_one_purchase(
-        api, failed_customer, points=7, loyalty_snapshot=loyalty_snapshot
-    )
+    assert_one_purchase(api, failed_customer, points=7, loyalty_snapshot=loyalty_snapshot)
     finish_browser_purchase(api, browser, loyalty_snapshot)
 
 

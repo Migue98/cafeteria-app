@@ -1,6 +1,7 @@
 name: svc-pedidos CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "ruff.toml"

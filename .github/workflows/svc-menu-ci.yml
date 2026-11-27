@@ -1,6 +1,7 @@
 name: svc-menu CI
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "ruff.toml"

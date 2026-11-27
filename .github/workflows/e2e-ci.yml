@@ -1,6 +1,7 @@
 name: Integrated E2E
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "frontend/**"
@@ -57,10 +58,10 @@ jobs:
       - name: Install Chromium and system dependencies
         run: python -m playwright install --with-deps chromium
 
-      - name: Check browser tests and shared helpers
+      - name: Check browser tests, outage recovery and shared helpers
         run: |
-          python -m ruff check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py scripts/run_e2e.py
-          python -m ruff format --check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py scripts/run_e2e.py
+          python -m ruff check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_failure_recovery.py scripts/run_e2e.py
+          python -m ruff format --check tests/browser tests/conftest.py tests/support.py tests/e2e/conftest.py tests/e2e/test_failure_recovery.py scripts/run_e2e.py
 
       - name: Validate public Compose template
         env:

@@ -1,6 +1,7 @@
 name: Local monitoring
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "frontend/**"

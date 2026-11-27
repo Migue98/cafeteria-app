@@ -190,7 +190,10 @@ def test_checkout_failure_is_visible_and_can_be_retried(
         assert_no_overflow(page)
         page.screenshot(path=OUTPUT / "320-checkout-error.png")
     finally:
-        subprocess.run([*compose_command, "start", "svc-pedidos"], check=True)
+        subprocess.run(
+            [*compose_command, "up", "--detach", "--no-deps", "--no-recreate", "svc-pedidos"],
+            check=True,
+        )
         api.wait_until_healthy()
     page.get_by_role("link", name="Volver al carrito").click()
     page.get_by_role("button", name="Confirmar pedido").click()

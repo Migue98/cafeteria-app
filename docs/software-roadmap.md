@@ -62,6 +62,13 @@ compartido y terminar con `success`; una ejecución de otro commit no valida
 esta entrega. Los resultados locales anteriores permanecen como evidencia de
 sus respectivos pasos.
 
+En la primera ejecución remota del cierre se detectó un fallo al restaurar
+pedidos tras una caída. Las pruebas restauran ahora solo el servicio
+interrumpido con `up --detach --no-deps --no-recreate` y conservan la espera de
+salud HTTP. Los seis workflows admiten también ejecución manual desde Actions.
+La regresión completa local aprobó 31 casos HTTP en 144.56 segundos y 12 casos
+Chromium en 79.59 segundos, con limpieza automática del entorno aislado.
+
 ## Observabilidad local antes de la revisión visual
 
 Este bloque se incorpora antes de retomar el paso 3 de cierre de la web.

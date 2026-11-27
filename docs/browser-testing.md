@@ -92,6 +92,14 @@ navegador real de Playwright.
 sus dependencias del sistema, comprueba Ruff y formato y ejecuta el runner
 completo. No se deshabilitan pruebas ni se sustituyen servicios en CI.
 
+Los workflows también permiten **Run workflow** (`workflow_dispatch`) sobre
+`main`. Para las caídas de pedidos, la restauración utiliza
+`compose up --detach --no-deps --no-recreate`: arranca el contenedor interrumpido
+y conserva los demás. Las comprobaciones HTTP esperan después a los cuatro
+servicios. Esto evita que un `compose start` fallido deje pedidos apagado y
+provoque errores en cascada en los casos siguientes; la salida de restauración
+queda visible en el log de CI.
+
 Referencias: [Playwright para pytest](https://playwright.dev/python/docs/test-runners),
 [aserciones y esperas](https://playwright.dev/python/docs/test-assertions) y
 [visor de trazas](https://playwright.dev/python/docs/trace-viewer-intro).
